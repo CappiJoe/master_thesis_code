@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<launch>
-    <param name="wall_description" command="cat '$(find autonomous_docking)/wall_behind_dock/wall_behind_dock.sdf'"/>
-    <node name="spawn_wall_behind_dock_sdf" pkg="gazebo_ros" type="spawn_model" output="screen"
-        args ="-sdf -param wall_description -model wall_behind_dock"/>
-</launch>
