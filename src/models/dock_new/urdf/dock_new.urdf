@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com)
+     Commit Version: 1.5.1-0-g916b5db  Build Version: 1.5.7152.31018
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="dock_new">
+  <link
+    name="dock_new">
+    <inertial>
+      <origin
+        xyz="10 10.10843 0.098619"
+        rpy="0 0 0" />
+      <mass
+        value="3778.9" />
+      <inertia
+        ixx="999.34"
+        ixy="47.546"
+        ixz="85.759"
+        iyy="2269.6"
+        iyz="21.9780000000001"
+        izz="3058.2" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="10 10.10843 0.098619"
+        rpy="1.5707963267949 0 0" />
+      <geometry>
+        <mesh
+          filename="package://dock_new/meshes/dock_new.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.77647 0.77647 0.81961 1" />
+        <texture
+          filename="package://dock_new/textures/" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="10 10.10843 0.098619"
+        rpy="1.5707963267949 0 0" />
+      <geometry>
+        <mesh
+          filename="package://dock_new/meshes/dock_new.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <static>1</static>
+</robot>

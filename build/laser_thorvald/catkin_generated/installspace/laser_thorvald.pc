@@ -1,0 +1,8 @@
+prefix=/home/student/casper/workspace/install
+
+Name: laser_thorvald
+Description: Description of laser_thorvald
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

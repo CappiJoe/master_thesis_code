@@ -1,0 +1,119 @@
+#! /usr/bin/env python
+
+import roslib
+
+import rospy
+import math
+import tf
+import angles
+from geometry_msgs.msg import Twist, Pose, Point
+from nav_msgs.msg import Odometry
+
+
+#Subscribing to relevant topics to obtain information about Thorvald's odometry
+class base_link_data():
+    def __init__(self):
+        self.pose_msg = rospy.Subscriber("/odometry/base_raw", Odometry, self.odom_callback, queue_size=1) # Raw base data
+        #self.pose_msg = rospy.Subscriber("/odometry/base_raw", Odometry, self.odom_callback, queue_size=1) # Kalman Filter
+        self.x_coor = 0
+        self.y_coor = 0
+        self.current_heading = 0
+        self.current_vel = 0
+        rospy.loginfo("x coordinate: %f" %self.x_coor)
+
+    def odom_callback(self, odom_msg):
+        rate = rospy.Rate(10.0)
+        #rospy.loginfo("Entered Callback for pose")
+
+        #Coordinates
+        self.x_coor = odom_msg.pose.pose.position.x
+        self.y_coor = odom_msg.pose.pose.position.y
+
+        #Heading
+        #q = odom_msg.pose.pose.orientation
+        self.current_heading = angles.normalize_angle(2*math.acos(odom_msg.pose.pose.orientation.w))
+        # euler_rot = tf.transformations.euler_from_quaternion(q)
+        # #        yaw = angles.normalize_angle(q.z/(math.sin(2*math.acos(q.w)/2)))
+        # self.current_heading = euler_rot[3]
+
+        #Velocity
+        self.current_vel = odom_msg.twist.twist.linear.x
+        rospy.loginfo("x coordinate: %f, y coordinate: %f, heading: %f, longitudinal velocity: %f" %(self.x_coor, self.y_coor, self.current_heading, self.current_vel))
+
+        #For controller:
+        thorvald_vel = rospy.Publisher('/nav_vel', Twist, queue_size=1)
+        goal_for_test = [10,10] # TEST
+        #Define the twist command
+        cmd = Twist()
+
+        #angular_error = heading - goal_orientation
+        # angular = 1.2*math.atan2(trans[1],trans[0])#-angles.normalize_angle(math.acos(rot[3]))
+
+        #Calculate desired desired_direction
+        dy = goal_for_test[1]-self.y_coor
+        dx = goal_for_test[0]-self.x_coor
+        desired_direction = angles.normalize_angle(math.atan2(dy,dx))
+
+        #Calculate the error between the current heading and the desired direction
+        angular_error = desired_direction-self.current_heading # TEST
+
+        ### Steering Control ###
+        if abs(angular_error) > math.pi/50: # 10 degrees
+            cmd.angular.z = .2*angular_error
+        rospy.loginfo("Heading error: %f" %angular_error)
+
+        #Calculate the position error:
+        # linear = 0.5*math.sqrt(trans[0]**2 + trans[1]**2)
+        pos_error = math.sqrt((goal_for_test[0]-self.x_coor)**2 + (goal_for_test[1]-self.y_coor)**2)
+        rospy.loginfo("Position error: %f" %pos_error)
+        linear = 0.5*pos_error
+
+        ### Longitudinal Control ###
+        if abs(linear) > 0.05:
+            cmd.linear.x = 0.4*linear/abs(linear)
+
+        thorvald_vel.publish(cmd)
+        rate.sleep()
+############################### Localizing the charger ###############################
+#class localize_charger():
+#     def __init__(self):
+#         rospy.Subscriber("scan", LaserScan, self.localize_from_scan)
+#         self.charger_x = 0
+#         self.charger_y = 0
+#
+#     def localize_from_scan(self, scan_msg):
+        # if INTENSITY > threshold
+            #self.charger_x = thorvald_odom[1] + dist*cos(alpha)
+            #self.charger_y = thorvald_odom[2] + dist*sin(alpha)
+            #self.charger_heading = ??
+        #WRITE AN APPROPRIATE ALGORITHM TO EXTRACT A POSITION FROM LASER DATA. USE INTENSITY MEASUREMENTS.
+
+############################### Controller ###############################
+    # while not rospy.is_shutdown():
+    #     try:
+    #         (trans,rot) = listener.lookupTransform('/base_link','/charger',rospy.Time(0)) #Can also add the fixed frame as a third frame
+    #         print(rot)
+    #     except(tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+    #         continue
+    #     goal_orientation = -angles.normalize_angle(math.acos(rot[3]))
+    #     goal_for_test = [10,10] # TEST
+    #     #angular_error = heading - goal_orientation
+    #     # angular = 1.2*math.atan2(trans[1],trans[0])#-angles.normalize_angle(2*math.acos(rot[3]))
+    #     angular = 0 # TEST
+    #     print(angular)
+    #     # linear = 0.5*math.sqrt(trans[0]**2 + trans[1]**2)
+    #     pos_error = sqrt((goal_for_test[0]-self.x_coor)**2 + (goal_for_test[1]-self.y_coor)**2)
+    #     rospy.loginfo("Error %f" %pos_error)
+    #     linear = 0.5*pos_error
+    #     cmd = Twist()
+    #     if abs(linear) > 0.4:
+    #         cmd.linear.x = 0.4*linear/abs(linear)
+    #     cmd.angular.z = angular
+    #     thorvald_vel.publish(cmd)
+    #     rate.sleep()
+############################### MAIN FUNCTION ###############################
+
+if __name__ =='__main__':
+    rospy.init_node('odometry_listener')
+    base_link_data()
+    rospy.spin()

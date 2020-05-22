@@ -1,0 +1,102 @@
+#! /usr/bin/env python
+
+import roslib
+
+import rospy
+import numpy as np
+import math
+import tf
+import angles
+from geometry_msgs.msg import Twist, Pose, Point
+from nav_msgs.msg import Odometry
+
+
+#Subscribing to relevant topics to obtain information about Thorvald's odometry
+class base_link_data():
+    def __init__(self):
+        #self.pose_msg = rospy.Subscriber("/odometry/base_raw", Odometry, self.odom_callback, queue_size=1) # Raw base data
+        self.pose_msg = rospy.Subscriber("/odometry/base_raw", Odometry, self.odom_callback, queue_size=1) # Kalman Filter
+        #self.pose_msg = rospy.Subscriber("charger_path", *** , self.path_callback, queue_size=1) # Kalman Filter
+        self.x_coor = 0
+        self.y_coor = 0
+        self.current_heading = 0
+        self.current_vel = 0
+        rospy.loginfo("x coordinate: %f" %self.x_coor)
+
+    def odom_callback(self, odom_msg):#, path):
+        rate = rospy.Rate(10.0)
+        #Coordinates
+        self.x_coor = odom_msg.pose.pose.position.x
+        self.y_coor = odom_msg.pose.pose.position.y
+        #Heading
+        rot_q = odom_msg.pose.pose.orientation
+        self.current_heading = angles.normalize_angle(2*math.acos(odom_msg.pose.pose.orientation.w))
+        (roll, pitch, yaw) = euler_from_quaternion([rot_q.x, rot_q.y, rot_q.z,rot_q.w])
+        #Velocity
+        self.current_vel = odom_msg.twist.twist.linear.x
+        rospy.loginfo("x coordinate: %f, y coordinate: %f, heading: %f, longitudinal velocity: %f" %(self.x_coor, self.y_coor, self.current_heading, self.current_vel))
+        #For controller:
+        thorvald_vel = rospy.Publisher('/nav_vel', Twist, queue_size=1) # Publishing msg to the nav_vel topic. Twist as msg type.
+        cmd = Twist()
+
+
+        goal = [-10,7] # TEST
+        n = 5 # number of steps in path.
+        path = np.zeros((n,2))
+        s_dx = (goal[0])/n#-self.x_coor)/n #Step size x-direction
+        s_dy = (goal[1])/n#-self.y_coor)/n #Step size y-direction
+
+        path = [[5,5],
+                [-5,5],
+                [-5,-5],
+                [5,-5]]
+
+        counter = 1
+        p = path[counter] #path[counter]
+
+        #Calculate desired desired_direction
+        dx = p[0]-self.x_coor
+        dy = p[1]-self.y_coor
+        pos_error = math.sqrt(dx**2+dy**2)
+        rospy.loginfo("Position error: %f" %pos_error)
+
+        x_la = 1 #Lookahead distance
+        len_thorvald = 1.5
+        angle_to_waypoint = math.atan2(dy,dx)-self.current_heading
+        heading_error = angle_to_waypoint-self.current_heading
+
+        k_rho = 0.1
+        k_alpha = .2
+        k_beta = -.1
+
+        rho = pos_error
+        alpha = angle_to_waypoint - self.current_heading
+        beta = angle_to_waypoint
+
+        velocity_x = k_rho*rho
+        steering_rate = k_alpha*alpha + k_beta*beta
+        if alpha < -math.pi/2 and alpha > math.pi/2:
+            velocity_x = -k_rho*rho
+            steering_rate = -(k_alpha*alpha + k_beta*beta)
+        max_steering_rate = 0.4
+
+        print("HER %f" %steering_rate)
+        print("Heading error: %f" %heading_error)
+
+        cmd = Twist()
+        if abs(velocity_x) > 0.4:
+            cmd.linear.x = 0.4*velocity_x/abs(velocity_x)
+        else:
+            cmd.linear.x = velocity_x
+
+        # if abs(steering_rate) > max_steering_rate:
+        #     cmd.angular.z = 0.4*steering_rate/abs(steering_rate)
+        # else:
+        cmd.angular.z = steering_rate
+
+        thorvald_vel.publish(cmd)
+        rate.sleep()
+if __name__ =='__main__':
+    rospy.init_node('odometry_listener')
+    base_link_data()
+    rospy.spin()

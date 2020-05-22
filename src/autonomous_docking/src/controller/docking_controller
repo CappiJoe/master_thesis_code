@@ -1,0 +1,202 @@
+#! /usr/bin/env python
+
+import roslib
+import rospy
+import numpy as np
+import math
+import angles
+from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseArray, PoseStamped
+from nav_msgs.msg import Odometry
+from sensor_msgs.msg import LaserScan
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
+
+class docking_controller(object):
+
+    def __init__(self):#initial setup
+        """ SET SIMULATION """
+        sim = True
+        """----------------"""
+
+        self.message_idle = "Docking action is IDLE."
+        self.message_active = "Docking action is ACTIVE."
+
+        if sim == True:
+            state_publisher = "/odometry/base_raw"
+            rospy.Subscriber(state_publisher, Odometry, self.state_callback, queue_size=1)
+        else:
+            state_publisher = "/robot_pose_ekf/odom_combined"
+            rospy.Subscriber(state_publisher, PoseWithCovarianceStamped, self.state_callback, queue_size=1)
+
+        rospy.Subscriber('/charger_waypoints', PoseArray, self.laser_pose_callback, queue_size=1)
+        rospy.Subscriber('/apriltag_goal', PoseStamped, self.apriltag_callback, queue_size=1)
+        rospy.Subscriber('/scan',LaserScan, self.laser_rangefinder, queue_size=1)
+        self.thorvald_x_coordinate = 0
+        self.thorvald_y_coordinate = 0
+        self.thorvald_heading = 0
+        self.current_vel = 0
+        self.ready_to_dock = False
+        self.successfully_docked = False
+        self.apriltag_goal_is_received = False
+        self.waypoint_is_received = False
+        self.arrived_at_pose = False
+        self.goal = [None, None, None]
+
+    def laser_pose_callback(self, waypoint_msg):
+        waypoint_update_rate = rospy.Rate(10)
+        laser_goal_pose = waypoint_msg.poses[0].orientation
+        (roll_goal, pitch_goal, yaw_goal) = euler_from_quaternion([laser_goal_pose.x, laser_goal_pose.y, laser_goal_pose.z,laser_goal_pose.w])
+        self.laser_goal = [waypoint_msg.poses[0].position.x,waypoint_msg.poses[0].position.y, yaw_goal]
+
+        waypoint_pose_q = waypoint_msg.poses[1].orientation
+        (roll, pitch, yaw) = euler_from_quaternion([waypoint_pose_q.x, waypoint_pose_q.y, waypoint_pose_q.z,waypoint_pose_q.w])
+        self.waypoint = [waypoint_msg.poses[1].position.x,waypoint_msg.poses[1].position.y, yaw]
+        self.waypoint_is_received = True
+        waypoint_update_rate.sleep()
+
+    def apriltag_callback(self, goal_msg):
+        apriltag_update_rate = rospy.Rate(10)
+        goal_pose_q = goal_msg.pose.orientation
+        (roll_april, pitch_april, yaw_april) = euler_from_quaternion([goal_pose_q.x, goal_pose_q.y, goal_pose_q.z,goal_pose_q.w])
+        self.goal_pose = [goal_msg.pose.position.x,goal_msg.pose.position.y, yaw_april]
+        self.apriltag_goal_is_received = True
+        apriltag_update_rate.sleep()
+
+    def state_callback(self, state_message):#, path):
+        state_rate = rospy.Rate(10.0)
+        self.thorvald_x_coordinate = state_message.pose.pose.position.x
+        self.thorvald_y_coordinate = state_message.pose.pose.position.y
+        rot_q = state_message.pose.pose.orientation
+        (roll, pitch, yaw) = euler_from_quaternion([rot_q.x, rot_q.y, rot_q.z,rot_q.w])
+        self.thorvald_heading = angles.normalize_angle(yaw)
+        self.control_inputs()
+        state_rate.sleep()
+
+    def control_inputs(self):
+        control_pose = [None]
+        use_linear = False
+        if self.ready_to_dock:
+            if self.apriltag_goal_is_received == True:
+                control_pose = self.goal_pose
+                rospy.loginfo("Trying to dock based on Apriltags")
+            else:
+                control_pose = self.laser_goal
+                rospy.loginfo("Could not detect apriltags. Using laser data.")
+            use_linear = True
+        else:
+            if self.waypoint_is_received:
+                control_pose = self.waypoint
+                rospy.loginfo("Docking in progress...")
+            else:
+                rospy.loginfo("Waiting for waypoint...")
+        # if self.goal[0] is not None:
+        #     distance_to_goal = math.sqrt((self.goal[0]-self.thorvald_x_coordinate)**2+(self.goal[1]-self.thorvald_x_coordinate)**2)
+        #     #if distance_to_goal < 0.2 and abs(self.goal[2]-self.thorvald_heading)<math.pi/18:
+                    #self.successfully_docked = True
+                    #rospy.loginfo("Thorvald has successfully docked")
+
+
+        if control_pose[0] is not None and use_linear == False:
+            self.pose_controller(control_pose)
+        elif use_linear == True:
+            self.linear_controller(control_pose)
+            if self.successfully_docked:
+                rospy.loginfo("Thorvald has successfully docked and is ready to charge...")
+            else:
+                rospy.loginfo("Executing final alignment...")
+
+
+    def laser_rangefinder(self, laser_msg):
+        scan_ranges = laser_msg.ranges
+        scan_angle_min = laser_msg.angle_min
+        scan_angle_inc = laser_msg.angle_increment
+        self.range_ahead = scan_ranges[len(scan_ranges)/2]
+
+    def linear_controller(self, docking_goal):
+        cmd = Twist()
+        thorvald_cmd = rospy.Publisher('/nav_vel', Twist, queue_size=1)
+        distance_to_goal = self.range_ahead
+        heading_error = docking_goal[2]-self.thorvald_heading
+        k_v = 0.5
+        k_w = 3
+        cmd_max_trans_vel = 0.2 # maximum longitudinal velocity
+        cmd_max_rot_vel = 0.2 # maximum yaw rate
+
+        cmd_velocity_x = k_v*distance_to_goal
+        cmd_steering_rate = k_w*heading_error
+        cmd.linear.x = cmd_velocity_x
+        cmd.angular.z = cmd_steering_rate
+        if distance_to_goal < 3.0:
+            cmd.linear.x = 0
+            cmd.angular.z = 0
+            rospy.loginfo("In position!")
+            self.successfully_docked = True
+        else:
+            if cmd_velocity_x > cmd_max_trans_vel:
+                cmd.linear.x = cmd_max_trans_vel*cmd_velocity_x/abs(cmd_velocity_x)
+            if cmd_steering_rate > cmd_max_rot_vel:
+                cmd.angular.z = cmd_max_rot_vel*cmd_steering_rate/abs(cmd_steering_rate)
+        thorvald_cmd.publish(cmd)
+
+
+    def pose_controller(self, current_waypoint):
+        goal = current_waypoint
+        #self.arrived_at_pose = False
+        #rate = rospy.Rate(10.0)
+        thorvald_cmd = rospy.Publisher('/nav_vel', Twist, queue_size=1) # Publishing msg to the nav_vel topic. Twist as msg type.
+        cmd = Twist()
+
+        cmd_max_trans_vel = 0.4 # maximum longitudinal velocity
+        cmd_max_rot_vel = 0.8 # maximum yaw rate
+
+        ## Stability: k_alpha>0, k_beta<0 and (k_alpha-k_rho)>0
+        k_rho = 0.5 # control gain for longitudinal velocity
+        k_alpha = 3.4 # control gain for heading error
+        k_beta = -0.7# control gain for goal orientation
+
+        dx = goal[0]-self.thorvald_x_coordinate
+        dy = goal[1]-self.thorvald_y_coordinate
+
+        distance_to_goal = math.sqrt(dx**2+dy**2)
+        angle_to_waypoint = angles.normalize_angle(math.atan2(dy,dx))
+        heading_error = angles.normalize_angle(angle_to_waypoint-self.thorvald_heading)
+
+        rho = distance_to_goal
+        alpha = heading_error
+        beta = angles.normalize_angle(self.thorvald_heading+goal[2])
+
+        """ Linearized controller for small angles, non-linear for greater angles """
+        if abs(alpha) < math.pi/18: #Linear
+            cmd_velocity_x = k_rho*rho
+            cmd_steering_rate = (k_alpha+k_rho)*alpha + (k_beta+k_rho)*beta
+        else:  #Non-linear
+            cmd_velocity_x = k_rho*rho*math.cos(alpha)
+            cmd_steering_rate = k_alpha*alpha + k_rho*((math.sin(alpha)*math.cos(alpha))/alpha)*(alpha + k_beta*beta)
+        # cmd_velocity_x = k_rho*rho*math.cos(alpha)
+        # cmd_steering_rate = k_alpha*alpha + k_rho*((math.sin(alpha)*math.cos(alpha))/alpha)*(alpha + k_beta*beta)
+        goal_orientation_degree = goal[2]*180/math.pi
+        current_heading_degree = self.thorvald_heading*180/math.pi
+        if distance_to_goal < 0.2 and int(current_heading_degree) in range(int(goal_orientation_degree)-5,int(goal_orientation_degree)+5):
+            cmd_velocity_x = 0.0
+            cmd_steering_rate = 0.0
+            self.arrived_at_pose = True
+            self.ready_to_dock = True
+
+
+        if abs(cmd_velocity_x) > cmd_max_trans_vel :
+            cmd.linear.x = cmd_max_trans_vel * (cmd_velocity_x/abs(cmd_velocity_x))
+        else:
+            cmd.linear.x = cmd_velocity_x
+
+        if abs(cmd_steering_rate) > cmd_max_rot_vel:
+             cmd.angular.z = cmd_max_rot_vel * (cmd_steering_rate/abs(cmd_steering_rate))
+        else:
+             cmd.angular.z = cmd_steering_rate
+
+        thorvald_cmd.publish(cmd)
+        #print("Distance to goal: %f \nCurrent command sent to Thorvald by the controller: %s" %(distance_to_goal,str(cmd)))
+        #ate.sleep()
+
+if __name__ == "__main__":
+    rospy.init_node("docking_controller")
+    docking_controller()
+    rospy.spin()

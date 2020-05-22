@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+    <param name="wall_description" command="cat '$(find grey_wall_charging)/boundary_wall.sdf'"/>
+    <node name="spawn_grey_wall_sdf" pkg="gazebo_ros" type="spawn_model" output="screen"
+        args ="-sdf -param wall_description -model grey_wall_charging"/>
+</launch>

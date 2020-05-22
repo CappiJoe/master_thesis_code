@@ -1,0 +1,61 @@
+#! /usr/bin/env python
+
+import rospy
+import actionlib
+import roslib
+roslib.load_manifest('docking_function')
+import move_base_msgs.msg
+from geometry_msgs.msg import Pose2D, Point
+from sensor_msgs.msg import LaserScan
+
+class move_into_station_node():
+    def __init__(self):
+        self.goal_pub = rospy.Publisher('send_goal', Pose2D, queue_size=1) #This is to test the messages
+        self.goal_coordinates = rospy.Subscriber("charger_location", Point, self.charger_loc_callback)
+        # proximity_distance = rospy.Subscriber("scan", LaserScan, self.proximity_callback)
+        rospy.loginfo("Running")
+        rospy.spin()
+
+
+
+    def charger_loc_callback(self, coordinates):
+        rospy.loginfo("Entered callback")
+        self.goal_x = coordinates.x
+        self.goal_y = coordinates.y
+        rospy.loginfo("Obtained the following goal coordinates: (%f, %f)" % (coordinates.x, coordinates.y))
+        rate = rospy.Rate(10)
+        while not rospy.is_shutdown():
+            # Define goal message type
+            goal_msg = Pose2D()
+            # Define values for
+            goal_msg.x = self.goal_x
+            goal_msg.y = self.goal_y
+            goal_msg.theta = 0#-1*self.final_heading
+            #The heading orientation of
+            #the final pose can be set as the reversed heading of the charger,
+            #given that the charger has been given a heading perpendicular
+            #to its baseline
+            #Publish goal message
+            self.goal_pub.publish(goal_msg) # Remove this
+            rate.sleep()
+            rospy.loginfo("Sent the following goal to MoveBase %f, %f, %f" % (goal_msg.x, goal_msg.y, goal_msg.theta ))
+
+             # # Define the client and which server it will communicate with.
+             # client = actionlib.SimpleActionClient('move_into_station', docking_action_test_server)
+             # client.wait_for_server()
+             # # send the goal to the server
+             # client.send_goal(goal)
+             # # Print the goal message to the monitor
+    # def proximity_callback(self):
+    def final_heading_calc(self):
+        #The final heading is defined here
+        self.final_heading = 0
+
+if __name__ == '__main__':
+    rospy.init_node("into_station_node") # Remove this
+    move_into_station_node()
+
+    # client = actionlib.SimpleActionClient('move_into_station', docking_action_test_server)
+    # client.wait_for_server()
+    # client.send_goal(goal)
+    # client.wait_for_result(rospy.Duration.from_sec(5.0))

@@ -1,0 +1,119 @@
+#! /usr/bin/env python
+
+import roslib
+import rospy
+import numpy as np
+import math
+import angles
+from geometry_msgs.msg import Twist, PoseWithCovarianceStamped, PoseArray, PoseStamped
+from nav_msgs.msg import Odometry
+from sensor_msgs.msg import LaserScan
+from std_msgs.msg import Float32
+
+
+class enter_station_controller(object):
+    def __init__(self):#initial setup
+        """ SET SIMULATION """
+        sim = True
+        """----------------"""
+
+        """ SET AVAILABLE SENSORS"""
+        self.only_camera_is_available = True
+        self.only_laser_is_available = False
+        self.both_sensors_are_available = False
+        """----------------------"""
+
+        """ INITIAL VARIABLES """
+        self.thorvald_x_coordinate = 0
+        self.thorvald_y_coordinate = 0
+        self.thorvald_heading = 0
+        self.current_vel = 0
+        self.ready_to_dock = False
+        self.successfully_docked = False
+        self.apriltag_goal_is_received = False
+        self.waypoint_is_received = False
+        self.arrived_at_pose = False
+
+        """ TOPIC SUBSCRIBERS """
+        if sim == True:
+            state_publisher = "/odometry/base_raw"
+            rospy.Subscriber(state_publisher, Odometry, self.state_callback, queue_size=1)
+        else:
+            state_publisher = "/robot_pose_ekf/odom_combined"
+            #state_odom
+            #state_amcl =
+            # Estimator: xcoor = 0,7*amcl_x + 0.3*odom_x
+            rospy.Subscriber(state_publisher, PoseWithCovarianceStamped, self.state_callback, queue_size=1)
+        rospy.Subscriber('/apriltag_station_pose', PoseStamped, self.apriltag_station_callback, queue_size=1)
+        rospy.Subscriber('/apriltag0_range', Float32, self.apriltag_station_callback, queue_size=1)
+        rospy.Subscriber('/laser_waypoints', PoseArray, self.laser_pose_callback, queue_size=1)
+        rospy.Subscriber('/scan',LaserScan, self.laser_rangefinder, queue_size=1)
+
+    def apriltag_station_callback(self, apriltag_station_msg):
+        apriltag_update_rate = rospy.Rate(10)
+        gate_pose_q = apriltag_station_msg.poses[0].orientation
+        (roll_goal, pitch_goal, yaw_goal) = euler_from_quaternion([goal_pose_q.x, goal_pose_q.y, goal_pose_q.z,goal_pose_q.w])
+        self.apriltag_station_is_received = True
+        self.apriltag_goal = [apriltag_station_msg.poses[0].position.x, apriltag_station_msg.poses[0].position.y, yaw_goal]
+
+        initial_pose_q = apriltag_station_msg.poses[1].orientation
+        (roll_initial, pitch_initial, yaw_initial) = euler_from_quaternion([initial_pose_q.x, initial_pose_q.y, initial_pose_q.z,initial_pose_q.w])
+        self.apriltag_initial_pose_is_received = True
+        self.apriltag_initial_pose = [apriltag_station_msg.poses[1].position.x, apriltag_station_msg.poses[1].position.y, yaw_initial]
+        apriltag_update_rate.sleep()
+
+    def state_callback(self, state_message):#, path):
+        state_rate = rospy.Rate(10.0)
+        self.thorvald_x_coordinate = state_message.pose.pose.position.x
+        self.thorvald_y_coordinate = state_message.pose.pose.position.y
+        rot_q = state_message.pose.pose.orientation
+        (roll, pitch, yaw) = euler_from_quaternion([rot_q.x, rot_q.y, rot_q.z,rot_q.w])
+        self.thorvald_heading = angles.normalize_angle(yaw)
+        state_rate.sleep()
+
+    def pose_controller(self, goal):
+        thorvald_cmd = rospy.Publisher('/nav_vel', Twist, queue_size=1) # Publishing msg to the nav_vel topic. Twist as msg type.
+        cmd = Twist()
+        cmd_max_trans_vel = 0.4 # maximum longitudinal velocity
+        cmd_max_rot_vel = 0.8 # maximum yaw rate
+
+        """Stability: k_alpha>0, k_beta<0 and (k_alpha-k_rho)>0"""
+        k_rho = 0.5 # control gain for longitudinal velocity
+        k_alpha = 3.2 # control gain for heading error
+        k_beta = -0.8# control gain for goal orientation
+
+        dx = goal[0]-self.thorvald_x_coordinate #Difference in x coordinates between Thorvald and goal
+        dy = goal[1]-self.thorvald_y_coordinate #Difference in y coordinates between Thorvald and goal
+
+        distance_to_goal = math.sqrt(dx**2+dy**2)
+        angle_to_goal_from_base_link = angles.normalize_angle(math.atan2(dy,dx))
+        heading_error = angles.normalize_angle(angle_to_goal_from_base_link-self.thorvald_heading)
+        rho = distance_to_goal
+        alpha = heading_error
+        beta = angles.normalize_angle(self.thorvald_heading+goal[2]) #Goal orientation wrt global x-axis
+
+        """ Linearized controller for small angles, non-linear for greater angles """
+        if abs(alpha) < math.pi/18: #Linear
+            cmd_velocity_x = k_rho*rho
+            cmd_steering_rate = (k_alpha+k_rho)*alpha + (k_beta+k_rho)*beta
+        else:  #Non-linear
+            cmd_velocity_x = k_rho*rho*math.cos(alpha)
+            cmd_steering_rate = k_alpha*alpha + k_rho*((math.sin(alpha)*math.cos(alpha))/alpha)*(alpha + k_beta*beta)
+        goal_orientation_degree = goal[2]*180/math.pi
+        current_heading_degree = self.thorvald_heading*180/math.pi
+        if distance_to_goal < 0.2 and abs(goal[2]-self.thorvald_heading) <= math.pi/36:
+            cmd_velocity_x = 0.0
+            cmd_steering_rate = 0.0
+            self.arrived_at_pose = True
+            self.ready_to_enter = True
+
+        if abs(cmd_velocity_x) > cmd_max_trans_vel :
+            cmd.linear.x = cmd_max_trans_vel * (cmd_velocity_x/abs(cmd_velocity_x))
+        else:
+            cmd.linear.x = cmd_velocity_x
+
+        if abs(cmd_steering_rate) > cmd_max_rot_vel:
+             cmd.angular.z = cmd_max_rot_vel * (cmd_steering_rate/abs(cmd_steering_rate))
+        else:
+             cmd.angular.z = cmd_steering_rate
+        thorvald_cmd.publish(cmd)

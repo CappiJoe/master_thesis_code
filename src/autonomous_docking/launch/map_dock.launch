@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<launch>
+
+<arg name="map_file" default="$(find autonomous_docking)/maps/floy_iv.yaml"/>
+<node pkg="map_server" type="map_server" name="map_server" args="$(arg map_file)"/>
+<include file="$(find simulation)/launch/amcl_omni.launch" />
+<!-- <include file="$(find simulation)/launch/localization_local.launch" />
+<include file="$(find simulation)/launch/fake_localization.launch" /> -->
+
+<!-- <group>
+    <node pkg="autonomous_docking" name="dock_localization" type="dock_localization" output="screen"></node>
+    <node pkg="autonomous_docking" name="tuned_controller_do_no_more" type="tuned_controller_do_no_more" output="screen"></node>
+
+</group> -->
+
+</launch>

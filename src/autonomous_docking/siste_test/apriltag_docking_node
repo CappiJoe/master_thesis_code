@@ -1,0 +1,209 @@
+#! /usr/bin/env python
+
+import rospy, actionlib, tf
+from geometry_msgs.msg import Twist, Pose, PoseStamped, PoseArray
+from sensor_msgs.msg import LaserScan
+from apriltag_ros.msg import AprilTagDetection, AprilTagDetectionArray
+from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
+from std_msgs.msg import Float32
+import numpy as np
+import math
+import angles
+
+class detect_charger(object):
+    def __init__(self):
+        rospy.Subscriber("/tag_detections", AprilTagDetectionArray, self.apriltag_callback, queue_size=1)
+        self.charger_pose_publisher = rospy.Publisher("/apriltag_charger_pose", PoseArray, queue_size=1)
+        self.station_pose_publisher = rospy.Publisher("/apriltag_station_pose", PoseArray, queue_size=1)
+        self.distance_publisher = rospy.Publisher("/apriltag0_range", Float32, queue_size=1)
+        self.lt = tf.TransformListener()
+
+    def apriltag_callback(self, tag_info):
+        tag_rate = rospy.Rate(0.5)
+        transf = self.lt.lookupTransform("map","camera",rospy.Time(0))
+        self.tag0_is_detected = False
+        self.tag1_is_detected = False
+        self.tag2_is_detected = False
+        self.tag3_is_detected = False
+        self.tag4_is_detected = False
+        for tag_detected in tag_info.detections:
+            if np.round(tag_detected.id) == 0:
+                tag_0 = tag_detected
+                self.tag0_is_detected = True
+                rospy.loginfo("TAG 0 DETECTED")
+            elif np.round(tag_detected.id) == 1:
+                tag_1 = tag_detected
+                self.tag1_is_detected = True
+            elif np.round(tag_detected.id) == 2:
+                tag_2 = tag_detected
+                self.tag2_is_detected = True
+            elif np.round(tag_detected.id) == 3:
+                tag_3 = tag_detected
+                self.tag3_is_detected = True
+            elif np.round(tag_detected.id) == 4:
+                tag_4 = tag_detected
+                self.tag4_is_detected = True
+
+        if len(tag_info.detections) >= 2:
+            if self.tag1_is_detected and self.tag2_is_detected:
+                charger_pose_array = PoseArray()
+                rospy.loginfo("Charger detected!")
+                """ THE CHARGER WILL BE ASSIGNED TAG WITH ID 1 AND ID 2,
+                WHERE 1 WILL REPRESENT THE LEFT SIDE OF THE DOCK """
+                position_tag1 = np.array([tag_1.pose.pose.pose.position.z,tag_1.pose.pose.pose.position.x])
+                position_tag2 = np.array([tag_2.pose.pose.pose.position.z,tag_2.pose.pose.pose.position.x])
+                distance_tag1 = np.sqrt((tag_1.pose.pose.pose.position.z+0.42)**2+tag_1.pose.pose.pose.position.x**2)
+                distance_tag2 = np.sqrt((tag_2.pose.pose.pose.position.z+0.42)**2+tag_2.pose.pose.pose.position.x**2)
+                #Calculate angles
+                angle_tag1 = math.atan2(-tag_1.pose.pose.pose.position.x,tag_1.pose.pose.pose.position.z+0.42)
+                angle_tag2 = math.atan2(-tag_2.pose.pose.pose.position.x,tag_2.pose.pose.pose.position.z+0.42)
+                tag1 = np.array([distance_tag1,angle_tag1])
+                tag2 = np.array([distance_tag2,angle_tag2])
+                charger_goal_calc, charger_waypoint_calc = self.calculate_waypoints(tag1,tag2)
+                # Determine charger_goal
+                charger_goal = PoseStamped()
+                charger_goal.pose.position.x = charger_goal_calc[0]
+                charger_goal.pose.position.y = charger_goal_calc[1]
+                charger_goal_quat = tf.transformations.quaternion_from_euler(0,0,charger_goal_calc[2])
+                charger_goal.pose.orientation.x = charger_goal_quat[0]
+                charger_goal.pose.orientation.y = charger_goal_quat[1]
+                charger_goal.pose.orientation.z = charger_goal_quat[2]
+                charger_goal.pose.orientation.w  = charger_goal_quat[3]
+                charger_goal.header.frame_id = "camera"
+                charger_goal = self.lt.transformPose("map",charger_goal)
+
+                """ CALCULATE INITIAL POSE TO OBTAIN BEFORE DOCKING """
+                charger_waypoint = PoseStamped()
+                charger_waypoint.pose.position.x = charger_waypoint_calc[0]
+                charger_waypoint.pose.position.y = charger_waypoint_calc[1]
+                charger_waypoint.pose.orientation.x = charger_goal_quat[0]
+                charger_waypoint.pose.orientation.y = charger_goal_quat[1]
+                charger_waypoint.pose.orientation.z = charger_goal_quat[2]
+                charger_waypoint.pose.orientation.w  = charger_goal_quat[3]
+                charger_waypoint.header.frame_id = "camera"
+
+                charger_waypoint = self.lt.transformPose("map",charger_waypoint)
+                charger_pose_array.poses = [charger_goal.pose, charger_waypoint.pose]
+                self.charger_pose_publisher.publish(charger_pose_array)
+
+                """ ......................................................"""
+
+                """ Uncomment to broadcast the waypoints """
+                # br = tf.TransformBroadcaster()
+                # br2 = tf.TransformBroadcaster()
+                #
+                # br.sendTransform((charger_goal.pose.position.x, charger_goal.pose.position.y, 0),
+                #                  (charger_goal.pose.orientation.x,charger_goal.pose.orientation.y,charger_goal.pose.orientation.z,charger_goal.pose.orientation.w),
+                #                  rospy.Time.now(),
+                #                  'charger',
+                #                  'map')
+                # br2.sendTransform((charger_waypoint.pose.position.x, charger_waypoint.pose.position.y, 0),
+                #                  (charger_waypoint.pose.orientation.x,charger_waypoint.pose.orientation.y,charger_waypoint.pose.orientation.z,charger_waypoint.pose.orientation.w),
+                #                  rospy.Time.now(),
+                #                  'charger_ref',
+                #                  'map')
+                """ ----------------------------------- """
+
+            if self.tag3_is_detected and self.tag4_is_detected:
+                station_gate_pose_array = PoseArray()
+                """ THE STATION GATE WILL BE ASSIGNED TAG WITH ID 3 AND ID 4,
+                WHERE 3 WILL REPRESENT THE LEFT SIDE OF THE DOCK """
+                rospy.loginfo("Station gate detected!")
+                position_tag3 = np.array([tag_3.pose.pose.pose.position.z,tag_3.pose.pose.pose.position.x])
+                position_tag4 = np.array([tag_4.pose.pose.pose.position.z,tag_4.pose.pose.pose.position.x])
+                distance_tag3 = np.sqrt((tag_3.pose.pose.pose.position.z+0.42)**2+tag_3.pose.pose.pose.position.x**2)
+                distance_tag4 = np.sqrt((tag_4.pose.pose.pose.position.z+0.42)**2+tag_4.pose.pose.pose.position.x**2)
+                #Calculate angles
+                angle_tag3 = math.atan2(-tag_3.pose.pose.pose.position.x,tag_3.pose.pose.pose.position.z)
+                angle_tag4 = math.atan2(-tag_4.pose.pose.pose.position.x,tag_4.pose.pose.pose.position.z)
+                tag3 = np.array([distance_tag3,angle_tag3])
+                tag4 = np.array([distance_tag4,angle_tag4])
+                station_gate_pose_calc, station_initial_pose_calc = self.calculate_waypoints(tag3,tag4)
+                # Determine pose of the gate at its midpoint
+                station_gate_pose = PoseStamped()
+                station_gate_pose.pose.position.x = station_gate_pose_calc[0]
+                station_gate_pose.pose.position.y = station_gate_pose_calc[1]
+                station_pose_quat = tf.transformations.quaternion_from_euler(0,0,station_gate_pose_calc[2])
+                station_gate_pose.pose.orientation.x = station_pose_quat[0]
+                station_gate_pose.pose.orientation.y = station_pose_quat[1]
+                station_gate_pose.pose.orientation.z = station_pose_quat[2]
+                station_gate_pose.pose.orientation.w  = station_pose_quat[3]
+                station_gate_pose.header.frame_id = "camera"
+                station_gate_pose = self.lt.transformPose("map",station_gate_pose)
+
+                """ CALCULATE INITIAL POSE TO OBTAIN BEFORE ENTERING STATION """
+                station_waypoint_pose = PoseStamped()
+                station_waypoint_pose.pose.position.x = station_initial_pose_calc[0]
+                station_waypoint_pose.pose.position.y = station_initial_pose_calc[1]
+                station_waypoint_pose.pose.orientation.x = station_pose_quat[0]
+                station_waypoint_pose.pose.orientation.y = station_pose_quat[1]
+                station_waypoint_pose.pose.orientation.z = station_pose_quat[2]
+                station_waypoint_pose.pose.orientation.w  = station_pose_quat[3]
+                station_waypoint_pose.header.frame_id = "camera"
+                station_gate_pose = self.lt.transformPose("map",station_waypoint_pose)
+
+                station_gate_pose_array.poses = [station_gate_pose.pose, station_waypoint_pose.pose]
+                self.station_pose_publisher.publish(station_gate_pose_array)
+
+        else:
+            rospy.loginfo("A pair of apriltags has not been detected yet....")
+
+        if self.tag0_is_detected:
+            """ TAG 0 WILL BE USED FOR RANGING WHEN LASER IS NOT PRESENT """
+            position_tag0 = np.array([tag_0.pose.pose.pose.position.z,tag_0.pose.pose.pose.position.x])
+            distance_to_tag0 = np.sqrt(position_tag0[0]**2+position_tag0[1]**2)
+            self.distance_publisher.publish(distance_to_tag0)
+            rospy.loginfo(distance_to_tag0)
+        else:
+            rospy.loginfo("Unable to find tag 0 for ranging")
+
+        tag_rate.sleep()
+
+    def calculate_waypoints(self,p_a,p_b):
+        '''
+        Caluclating a point a given distance (distance_to_goal_from_waypoint) in front of the charging station
+        as an inital pose before the fine operation of the docking takes place. The function is described in the related report.
+        '''
+        pose_time = rospy.Rate(10)
+
+        """ Define p1 as the point with the smallest angle. """
+        if p_a[1] < p_b[1]:
+            p1 = p_a
+            p2 = p_b
+        else:
+            p1 = p_b
+            p2 = p_a
+
+        p1_vec = np.array([p1[0]*math.cos(p1[1]),p1[0]*math.sin(p1[1])])
+        p2_vec = np.array([p2[0]*math.cos(p2[1]),p2[0]*math.sin(p2[1])])
+        a = p2_vec
+        angle_between_p1_p2 = p2[1]-p1[1]
+        baseline = p1_vec-p2_vec
+        p2_to_goal_vec = baseline/2
+        c = p2_to_goal_vec
+        distance_to_goal_from_waypoint = 2 # Change if desired
+        goal_vector = a+c
+
+
+        if abs(c[0]) < 10e-4:
+            waypoint_vec = goal_vector - [distance_to_goal_from_waypoint,0]
+            psi_goal = 0
+        else:
+            dy = math.sqrt((c[0]**2*distance_to_goal_from_waypoint**2)/(c[1]**2+c[0]**2))
+            if (-c[1]/c[0])*dy*a[0]+dy*a[1] >= 0:
+                dy = -dy
+            dx = -(c[1]/c[0])*dy
+            d = np.array([dx,dy])
+            waypoint_vec = a + c + d
+            psi_goal = math.atan2(-d[1],-d[0])
+        waypoint_pose = np.array([waypoint_vec[0], waypoint_vec[1], psi_goal])
+        goal_pose = np.array([goal_vector[0], goal_vector[1], psi_goal])
+
+        """ Return the pose of the charger and the calculated waypoint """
+        return goal_pose, waypoint_pose
+        pose_time.sleep()
+
+if __name__ == "__main__":
+    rospy.init_node("tag_detections")
+    detect_charger()
+    rospy.spin()

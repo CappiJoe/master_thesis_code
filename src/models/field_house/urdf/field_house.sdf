@@ -1,0 +1,37 @@
+<sdf version='1.6'>
+  <model name='field_house'>
+    <link name='field_house'>
+      <pose frame=''>0 0 0 0 -0 0</pose>
+      <inertial>
+        <pose frame=''>-0 0 1.3492 0 -0 0</pose>
+        <mass>48478</mass>
+        <inertia>
+          <ixx>69284</ixx>
+          <ixy>-2.1115e-11</ixy>
+          <ixz>3.6211e-13</ixz>
+          <iyy>164600</iyy>
+          <iyz>4.52551e-12</iyz>
+          <izz>182570</izz>
+        </inertia>
+      </inertial>
+      <collision name='field_house_collision'>
+        <pose frame=''>0 0 0 1.5708 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://field_house/meshes/field_house.STL</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name='field_house_visual'>
+        <pose frame=''>0 0 0 1.5708 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://field_house/meshes/field_house.STL</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>

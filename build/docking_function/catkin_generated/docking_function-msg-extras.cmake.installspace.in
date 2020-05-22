@@ -1,0 +1,2 @@
+set(docking_function_MESSAGE_FILES "msg/AlignAction.msg;msg/AlignActionGoal.msg;msg/AlignActionResult.msg;msg/AlignActionFeedback.msg;msg/AlignGoal.msg;msg/AlignResult.msg;msg/AlignFeedback.msg")
+set(docking_function_SERVICE_FILES "")

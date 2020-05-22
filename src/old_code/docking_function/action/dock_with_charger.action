@@ -1,0 +1,8 @@
+# Define the goal
+geometry_msgs/PoseWithCovarianceStamped Pose
+---
+# Define the result
+bool success
+---
+# Define a feedback message 
+geometry_msgs/Point

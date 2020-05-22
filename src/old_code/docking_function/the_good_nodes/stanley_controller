@@ -1,0 +1,172 @@
+#! /usr/bin/env python
+
+import roslib
+
+import rospy
+import numpy as np
+import math
+import tf
+import angles
+from geometry_msgs.msg import Twist, Pose, Point
+from nav_msgs.msg import Odometry
+import matplotlib.pyplot as plt
+
+#Subscribing to relevant topics to obtain information about Thorvald's odometry
+class Thorvald_state(object):
+    """
+    This class represents the state of the vehicle
+    Parameters:
+    x0: float, x-coordinate
+    y0: float, y-coordinate
+    current_heading: float, heading(yaw)
+    current_vel: float, current velocity
+    """
+    def __init__(self, x0=0.0, y0=0.0, current_heading=0.0, current_vel=0.0 ):
+        #self.pose_msg = rospy.Subscriber("/odometry/base_raw", Odometry, self.odom_callback, queue_size=1) # Raw base data
+        self.pose_msg = rospy.Subscriber("/odometry/base_raw", Odometry, self.update_state, queue_size=1) # Kalman Filter
+        #self.pose_msg = rospy.Subscriber("charger_path", *** , self.path_callback, queue_size=1)
+        self.x0 = x0
+        self.y0 = y0
+        self.current_heading = current_heading
+        self.current_vel = current_vel
+
+    def update_state(self, odom_msg):
+        #Update rate 10Hz
+        rate = rospy.Rate(10.0)
+        #Coordinates
+        self.x0 = odom_msg.pose.pose.position.x
+        self.y0 = odom_msg.pose.pose.position.y
+        #Heading
+        self.current_heading = angles.normalize_angle(2*math.acos(odom_msg.pose.pose.orientation.w))
+        #Velocity
+        self.current_vel = odom_msg.twist.twist.linear.x
+        rospy.loginfo("x coordinate: %f, y coordinate: %f, heading: %f, longitudinal velocity: %f" %(self.x_coor, self.y_coor, self.current_heading, self.current_vel))
+
+
+############################### Localizing the charger ###############################
+class charger_location_laser(object):
+        """
+        This object represents the pose of the charger
+        Parameters:
+        charger_x: float, x-coordinate
+        charger_y: float, y-coordinate
+        charger_orientation: float, orientation angle
+        """
+    def __init__(self, charger_x, charger_y, charger_orientation):
+        rospy.Subscriber("scan", LaserScan, self.laser_scan, queue_size=None)
+        charger_loc = rospy.Publisher("charger_loc", Pose, queue_size=1)
+        self.charger_x = charger_x
+        self.charger_y = charger_y
+        self.charger_orientation = charger_orientation
+    def laser_scan(self, scan_msg):
+        max_range_laser = scan_msg.range_max
+        min_range_laser = scan_msg.range_min
+        #Data of interest from the scan:
+        scan_ranges = scan_msg.ranges
+        scan_angle_min = scan_msg.angle_min
+        scan_angle_inc = scan_msg.angle_increment
+        scan_intensities = scan_msg.intensities
+        intensity_threshold = 0 ###Change after testing
+        #Thorvald's current position
+        base_link_pos = np.array([Thorvald_state.x0, Thorvald_state.y0])
+        #Empty array for the points of interest
+        reference_points = np.array([])
+        point_cluster_close = np.array([])
+        point_cluster_far = np.array([])
+        for idx, distance in enumerate(scan_ranges):
+            if scan_intensities[idx] > intensity_threshold and (idx+1)<len(scan_ranges):
+                point_angle = scan_angle_min + idx*scan_angle_inc #Start angle + n.o. angle increment to current laser tag
+                if distance < scan_ranges[idx+1] and scan_ranges[idx+1] != max_range_laser:
+                    np.append(point_cluster_close, [distance, point_angle]))
+                elif distance > scan_ranges[idx+1] and scan_ranges[idx+1] < max_range_laser:
+                    np.append(point_cluster_far, [distance, point_angle]))
+            elif
+        reference_point_close =  []
+
+
+
+        #Do necessary calculations
+
+        # if INTENSITY > threshold
+            #self.charger_x = thorvald_odom[1] + dist*cos(alpha)
+            #self.charger_y = thorvald_odom[2] + dist*sin(alpha)
+            #self.charger_heading = ??
+        #WRITE AN APPROPRIATE ALGORITHM TO EXTRACT A POSITION FROM LASER DATA. USE INTENSITY MEASUREMENTS.
+
+############################### Path planner ###############################
+class path_planner():
+    def __init__(self):
+        self.path = [Thorvald_state.x0, Thorvald_state.y0, Thorvald_state.heading]
+    def generate_path(self):
+        for path_point in path_points:
+            self.path.append(path_point)
+        return path
+
+############################## Controller ##############################
+len_thorvald = 1.5
+K_lin = 0.5 #Propotional speed controller gain
+K_pp = 2 #Gain for pure pursuit steering controller
+dt = 0.1 #Time-step
+#x_la = 1 #Lookahead distance
+max_steering_angle = np.radians(60)
+
+def waypoint_calc(Thorvald_state,)
+
+def lateral_controller():
+    #Current state
+    x0 = Thorvald_state.x0
+    y0 = Thorvald_state.y0
+    current_heading = Thorvald_state.current_heading
+    current_vel = Thorvald_state.current_vel
+
+    #Publisher
+    thorvald_vel = rospy.Publisher('/charger_loc', Pose, queue_size=1) # Publishing msg to the nav_vel topic. Twist as msg type.
+
+    #Get next waypoint
+    instance = 1 # 0 is the position of Thorvald
+    waypoint = path_planner.path[instance]
+
+    #Calculate distances
+    dx = waypoint[0]-self.x_coor
+    dy = waypoint[1]-self.y_coor
+    distance = math.sqrt(dx**2+dy**2) # distance to the current waypoint
+    rospy.loginfo("Position error: dx = %f, dy = %f" %(dx, dy))
+    rospy.loginfo("Distance to waypoint: %f" distance)
+
+    #Consider next waypoint when inside the defined range
+    if distance < 0.2 and instance < len(path_planner.path):
+        instance +=1
+
+    #Calculate the angle between heading and direction of waypointpoint
+    angle_la = math.atan2(dy,dx)-self.current_heading
+    rospy.loginfo("Heading angle with respect to the waypoint, 0 is desired: %f" %angle_la)
+    #Control commands
+        #Linear velocity, v_x
+    linear = K_lin*pos_error
+        #Angular velocity, z
+    steering_angle = math.atan2(2*len_thorvald*math.sin(angle_la),K_pp*linear)
+    steering_angle_rate = steering_angle/dt
+
+    if abs(steering_angle_rate) > max_steering_angle/dt:
+        steering_angle_rate = max_steering_angle/dt *steering_angle_rate/abs(steering_angle_rate)
+
+    heading_error = angle_la-self.current_heading
+    print("Heading error: %f" %heading_error)
+    print(steering_angle)
+    ################## Publish commands ###################
+    cmd = Twist()
+    if abs(linear) > 0.4:
+        cmd.linear.x = 0.4*linear/abs(linear)
+    cmd.angular.z = steering_angle_rate
+    thorvald_vel.publish(cmd)
+    rate.sleep()
+
+############################### MAIN FUNCTION ###############################
+def main(self):
+
+
+if __name__ =='__main__':
+    rospy.init_node('odometry_listener')
+    rospy.init_node('charger_loc')
+    base_link_data()
+    rospy.spin()

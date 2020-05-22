@@ -1,0 +1,8 @@
+prefix=/home/student/casper/workspace/devel
+
+Name: charging_station_gazebo
+Description: Description of charging_station_gazebo
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com)
+     Commit Version: 1.5.1-0-g916b5db  Build Version: 1.5.7152.31018
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="charger-platform">
+  <link
+    name="charger_urdf">
+    <inertial>
+      <origin
+        xyz="8.1602 11.9097 0"
+        rpy="1.5707963267949 0 0" />
+      <mass
+        value="3778.9" />
+      <inertia
+        ixx="999.34"
+        ixy="47.546"
+        ixz="85.759"
+        iyy="2269.6"
+        iyz="21.9780000000001"
+        izz="3058.2" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="8.1602 11.9097 0"
+        rpy="1.5707963267949 0 0" />
+      <geometry>
+        <mesh
+          filename="package://charger_urdf/meshes/charger_urdf.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.6 0.6 0.6 0.8" />
+        <texture
+          filename="package://charger_urdf/textures/" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="8.1602 11.9097 0" />
+      <geometry>
+        <mesh
+          filename="package://charger_urdf/meshes/charger_urdf.STL" />
+      </geometry>
+      <laser_retro>200</laser_retro>
+    </collision>
+  </link>
+  <static>1</static>
+</robot>
+<gazebo>
+    <laser_retro>200</laser_retro>
+</gazebo>

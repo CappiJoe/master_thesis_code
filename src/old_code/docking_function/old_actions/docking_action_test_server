@@ -1,0 +1,52 @@
+#! /usr/bin/env python
+
+import rospy
+import actionlib
+import move_base_msgs.msg
+from geometry_msgs.msg import Twist
+from sensor_msgs.msg import LaserScan
+
+class move_into_station(object):
+    #Create result message
+    _result = move_base_msgs.msg.MoveBaseResult()
+
+    def __init__(self, name):
+        self._cmd_pub = rospy.Publisher('nav_vel', Twist, queue_size=1)
+        #self.laser_scan = rospy.Subscriber(scan)
+        self._action_name = name
+
+        self._as = actionlib.SimpleActionServer(self._action_name, move_base_msgs.msg.MoveBaseAction, execute_cb=self.executable_cb, auto_start = False)
+        self._as.start()
+        rospy.loginfo('Waiting to move into the docking station')
+
+
+    def executable_cb(self, goal):
+        rate = rospy.Rate(10)
+
+        rospy.loginfo('Executing')
+
+        rate.sleep()
+        self._as.set_succeeded(True)
+
+        ## Functions for LASER readings
+    def laser_callback(data):
+        minimum = min(data.ranges)
+        rospy.loginfo(rospy.get_caller_id()+"The laser gets the following minimum range: %f" %minimum)
+
+    def get_laser_data():
+        ''' Lets rospy choose a unique
+        name so that it does not kick out any other nodes.'''
+        rospy.Subscriber("scan", LaserScan, laser_callback)
+
+        ## PATH, r-reference
+
+        ## CONTROLLER
+        # Send to move_base_msgs.MoveBaseAction or nav_vel?
+
+        ## ERROR ESTIMATION
+
+
+if __name__ == '__main__':
+    rospy.init_node('move_into_station')
+    server = move_into_station(rospy.get_name)
+    rospy.spin()

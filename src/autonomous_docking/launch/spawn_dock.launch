@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+    <param name="dock_description" command="cat '$(find dock_new)/urdf/dock_new.urdf'"/>
+    <node name="spawn_dock_urdf" pkg="gazebo_ros" type="spawn_model" output="screen"
+        args ="-urdf -param dock_description -model dock_urdf"/>
+</launch>

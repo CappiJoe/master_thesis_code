@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<launch>
+
+    <arg name="map_file" default="$(find autonomous_docking)/maps/charger_map_dock.yaml"/>
+    <node pkg="map_server" type="map_server" name="map_server" args="$(arg map_file)"/>
+    <include file="$(find simulation)/launch/amcl_omni.launch" />
+    <include file="$(find simulation)/launch/localization_local.launch" />
+    <include file="$(find simulation)/launch/fake_localization.launch" />
+
+    <!--
+    <node pkg="autonomous_docking" name="sim_laser_localization_node" type="sim_laser_localization_node" output="screen"></node>
+    <node pkg="autonomous_docking" name="sim_final_controller_node" type="sim_final_controller_node" output="screen"></node>
+-->
+
+</launch>

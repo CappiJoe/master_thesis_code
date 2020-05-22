@@ -1,0 +1,8 @@
+prefix=/home/student/casper/workspace/devel
+
+Name: laser_nodes
+Description: Description of laser_nodes
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

@@ -1,0 +1,37 @@
+<sdf version='1.6'>
+  <model name='dock_new'>
+    <link name='dock_new'>
+      <pose frame=''>0 0 0 0 -0 0</pose>
+      <inertial>
+        <pose frame=''>10 10.1084 0.098619 0 -0 0</pose>
+        <mass>3778.9</mass>
+        <inertia>
+          <ixx>999.34</ixx>
+          <ixy>47.546</ixy>
+          <ixz>85.759</ixz>
+          <iyy>2269.6</iyy>
+          <iyz>21.978</iyz>
+          <izz>3058.2</izz>
+        </inertia>
+      </inertial>
+      <collision name='dock_new_collision'>
+        <pose frame=''>10 10.1084 0.098619 1.5708 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://dock_new/meshes/dock_new.dae</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name='dock_new_visual'>
+        <pose frame=''>10 10.1084 0.098619 1.5708 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://dock_new/meshes/dock_new.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>

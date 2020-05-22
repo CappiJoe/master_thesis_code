@@ -1,0 +1,32 @@
+#! /usr/bin/env python
+
+import rospy, tf
+from sensor_msgs.msg import LaserScan
+import numpy as np
+import math
+import angles
+
+class detect_charger_laser(object):
+    def __init__(self):
+        rospy.Subscriber("/scan_front", LaserScan, self.laser_scan, queue_size=1)
+    def laser_scan(self, scan_msg):
+        rospy.loginfo("hei")
+        rate = rospy.Rate(0.2)
+        rospy.loginfo("hei")
+        scan_ranges = scan_msg.ranges
+        scan_angle_min = scan_msg.angle_min
+        scan_angle_inc = scan_msg.angle_increment
+        scan_intensities = scan_msg.intensities
+        threshold = 12000
+        for idx,val in enumerate(scan_intensities):
+            if val > threshold:
+                rospy.loginfo("Intensity: %f" %val)
+                rospy.loginfo("Distance:  %f" %scan_ranges[idx])
+                angle = scan_angle_min+idx*scan_angle_inc
+                rospy.loginfo("Angle: %f" %angle)
+        rate.sleep()
+
+if __name__ == "__main__":
+    rospy.init_node("charger_detector", anonymous=False)
+    detect_charger_laser()
+    rospy.spin()

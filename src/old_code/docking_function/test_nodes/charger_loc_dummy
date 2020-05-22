@@ -1,0 +1,21 @@
+#!/usr/bin/env python
+
+import rospy
+from geometry_msgs.msg import Point
+
+class charger_loc_node():
+
+    def __init__(self):
+        loc_pub = rospy.Publisher('charger_location', Point, queue_size=1) #self._string_pub hvis den skal brukes utenfor init, queue size = 1 for nyeste.
+        loc = Point()
+        loc.x = 5
+        loc.y = 5
+        rospy.loginfo("Sending location: (%s, %s)" % (loc.x, loc.y))
+        # Publish msg
+        loc_pub.publish(loc)
+
+
+if __name__ == '__main__':
+    rospy.init_node("charger_location")
+    charger_loc_node()
+    

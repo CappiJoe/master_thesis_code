@@ -1,0 +1,169 @@
+#! /usr/bin/env python
+
+import rospy
+import actionlib
+import rospy
+import numpy as np
+import math
+import tf
+import angles
+
+import actionlib
+import actionlib_msgs
+import move_base_msgs.msg
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
+
+from geometry_msgs.msg import Twist, Pose, PoseStamped
+from sensor_msgs.msg import LaserScan
+from nav_msgs.msg import Odometry
+import matplotlib.pyplot as plt
+
+class align_action(object):
+    #messages for publishing feedback and result
+    _feedback = move_base_msgs.msg.MoveBaseFeedback()
+    _result = move_base_msgs.msg.MoveBaseResult()
+
+    def __init__(self, name):
+        #Odometry data
+        self.pose_msg = rospy.Subscriber("/odometry/base_raw", Odometry, self.odom_callback, queue_size=1) # Kalman Filter
+        self.x_coor = 0
+        self.y_coor = 0
+        self.current_heading = 0
+        self.current_vel = 0
+        self.distance_to_goal = None
+        self.goal_orientation_degree = None
+        self.current_heading_degree = None
+        self.has_arrived = False
+        #Action initialization
+        self._action_name = name
+        self._as = actionlib.SimpleActionServer(self._action_name, move_base_msgs.msg.MoveBaseAction, execute_cb=self.execute_cb, auto_start=False)
+        self._as.start()
+        self.goal_pose = [5,5,0]
+
+    def pose_controller(self):
+        rospy.loginfo("entered controller")
+        rate = rospy.Rate(10.0)
+        #For controller:
+        thorvald_vel = rospy.Publisher('/nav_vel', Twist, queue_size=1) # Publishing msg to the nav_vel topic. Twist as msg type.
+        cmd = Twist()
+
+        #Velocity limitations
+        max_trans_vel = 0.4 # maximum longitudinal velocity
+        max_rot_vel = 0.5 # maximum yaw rate
+
+        ## Stability: k_alpha>0, k_beta<0 and (k_alpha-k_rho)>0
+        k_rho = 0.5 # control gain for velocity
+        k_alpha = 3 # control gain for heading error
+        k_beta = -2# control gain for goal orientation
+
+        dx = self.goal_pose[0]-self.x_coor
+        dy = self.goal_pose[1]-self.y_coor
+        self.distance_to_goal = math.sqrt(dx**2+dy**2)
+        angle_to_waypoint = angles.normalize_angle(math.atan2(dy,dx))
+        heading_error = angles.normalize_angle(angle_to_waypoint-self.current_heading)
+
+        rho = self.distance_to_goal
+        alpha = heading_error
+        beta = angles.normalize_angle(-alpha-self.current_heading+self.goal_pose[2])
+
+        if alpha < -math.pi/2:
+            alpha = -math.pi/2
+        elif alpha > math.pi/2:
+            alpha = math.pi/2
+
+
+        #Control commands
+        # Linearized control law for small angles
+        if abs(alpha) < math.pi/18:
+            velocity_x = k_rho*rho
+            steering_rate = k_alpha*alpha + k_beta*beta
+        else: # Nonlinear control law for bigger angles.
+            velocity_x = k_rho*rho*math.cos(alpha)
+            steering_rate = k_alpha*alpha + k_rho*((math.sin(alpha)*math.cos(alpha))/alpha)*(alpha + k_beta*beta)
+
+        self.goal_orientation_degree = self.goal_pose[2]*180/math.pi
+        self.current_heading_degree = self.current_heading*180/math.pi
+        # print("goal: %f" %goal_orientation_degree)
+        # print("current: %f" %current_heading_degree)
+
+        #Stop when inside the tolerance range
+        if  self.current_vel <0.08 and int(self.current_heading_degree) in range(int(self.goal_orientation_degree)-5,int(self.goal_orientation_degree)+5):
+            if self.distance_to_goal < 0.3:
+                velocity_x = 0
+                steering_rate = 0
+                self.has_arrived = True
+        ############# Controller commands
+
+        if abs(velocity_x) > max_trans_vel :
+            cmd.linear.x = max_trans_vel * (velocity_x/abs(velocity_x))
+        else:
+            cmd.linear.x = velocity_x
+
+        if abs(steering_rate) > max_rot_vel:
+             cmd.angular.z = max_rot_vel * (steering_rate/abs(steering_rate))
+        else:
+             cmd.angular.z = steering_rate
+
+        ############ Publish command
+        thorvald_vel.publish(cmd)
+        rate.sleep()
+
+    def odom_callback(self, odom_msg):
+        rate = rospy.Rate(10.0)
+        #Coordinates
+        self.x_coor = odom_msg.pose.pose.position.x
+        self.y_coor = odom_msg.pose.pose.position.y
+        #Heading
+        self.odom_q = odom_msg.pose.pose.orientation
+
+        #self.current_heading = angles.normalize_angle(2*math.acos(odom_msg.pose.pose.orientation.w))
+        (roll, pitch, yaw) = euler_from_quaternion([self.odom_q.x, self.odom_q.y, self.odom_q.z,self.odom_q.w])
+        self.current_heading = angles.normalize_angle(yaw)
+        #Velocity
+        self.current_vel = odom_msg.twist.twist.linear.x
+        rate.sleep()
+
+
+
+
+
+    def execute_cb(self,goal):
+        # helper variables
+        rate = rospy.Rate(1)
+        success = False
+        ############### Define the goal pose
+        rot_q = goal.target_pose.pose.orientation
+        (roll, pitch, yaw) = euler_from_quaternion([rot_q.x, rot_q.y, rot_q.z,rot_q.w])
+        goal_orientation = self.current_heading-angles.normalize_angle(yaw)
+        goal_x = goal.target_pose.pose.position.x
+        goal_y = goal.target_pose.pose.position.y
+        self.goal_pose = [goal_x,goal_y,goal_orientation]
+        ############## Move to pose, Controller
+        while success == False:
+            self.pose_controller()
+            if self.has_arrived == True:
+                success = True
+        ############## Feedback
+        self._feedback.base_position.pose.position.x = self.x_coor
+        self._feedback.base_position.pose.position.y = self.y_coor
+        #self._feedback.base_position.pose.orientation.z = self.odom_q.z
+        #self._feedback.base_position.pose.orientation.w = self.odom_q.w
+        self._as.publish_feedback(self._feedback)
+
+        rospy.loginfo("%s: executing... current goal: '[%s]'" %(self._action_name,','.join(map(str, self.goal_pose))))
+        #Check that preempt has not been requested
+        if self._as.is_preempt_requested():
+            rospy.loginfo("%s: preempted..." %self._action_name)
+            self._as.set_preempted()
+            success = False
+            #break
+        rate.sleep()
+
+        if success:
+            #self._result.success = True
+            rospy.loginfo("%s: succeeded!"%self._action_name)
+            self._as.set_succeeded(self._result)
+if __name__ == "__main__":
+    rospy.init_node("move_to_charger_action")
+    server = align_action(rospy.get_name())
+    rospy.spin()

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com)
+     Commit Version: 1.5.1-0-g916b5db  Build Version: 1.5.7152.31018
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="field_house">
+  <link
+    name="field_house">
+    <inertial>
+      <origin
+        xyz="-5 -5 0"
+        rpy="0 0 0" />
+      <mass
+        value="48478" />
+      <inertia
+        ixx="69284"
+        ixy="-2.1115E-11"
+        ixz="3.62109999999999E-13"
+        iyy="164600"
+        iyz="4.52550880890941E-12"
+        izz="182570" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="-5 -5 0"
+        rpy="1.5707963267949 0 0" />
+      <geometry>
+        <mesh
+          filename="package://field_house/meshes/field_house.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.77647 0.77647 0.81961 1" />
+        <texture
+          filename="package://field_house/textures/" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="-5 -5 0"
+        rpy="1.5707963267949 0 0" />
+      <geometry>
+        <mesh
+          filename="package://field_house/meshes/field_house.STL" />
+      </geometry>
+    </collision>
+  </link>
+</robot>

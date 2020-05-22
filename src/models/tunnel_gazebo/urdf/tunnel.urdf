@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com)
+     Commit Version: 1.5.1-0-g916b5db  Build Version: 1.5.7152.31018
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="Tunnel_Gazebo">
+  <link
+    name="Tunnel_Gazebo">
+    <inertial>
+      <origin
+        xyz="15 0 0"
+        rpy="0 0 0" />
+      <mass
+        value="100020" />
+      <inertia
+        ixx="351410"
+        ixy="-1.08760000000004E-12"
+        ixz="5.9917E-10"
+        iyy="1966700"
+        iyz="-5.08444540550824E-12"
+        izz="2135400" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="15 0 0"
+        rpy="1.5707963267949 0 0" />
+      <geometry>
+        <mesh
+          filename="package://tunnel_gazebo/meshes/Tunnel_Gazebo.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.77647 0.77647 0.81961 1" />
+        <texture
+          filename="package://tunnel_gazebo/textures/" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="15 0 0"
+        rpy="1.5707963267949 0 0" />
+      <geometry>
+        <mesh
+          filename="package://tunnel_gazebo/meshes/Tunnel_Gazebo.STL" />
+      </geometry>
+    </collision>
+  </link>
+</robot>

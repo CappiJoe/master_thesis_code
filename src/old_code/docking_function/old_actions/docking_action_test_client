@@ -1,0 +1,41 @@
+#! /usr/bin/env python
+
+import rospy
+import actionlib
+import roslib
+roslib.load_manifest('docking_function')
+import move_base_msgs.msg
+from geometry_msgs.msg import Pose, Quaternion
+
+
+class move_into_station_node(self):
+    def publish_goal(self):
+        goal_pub = rospy.Publisher('send_goal', Pose, queue_size=1)
+        goal_coordinates = rospy.Subscriber("charger_location")
+        rate = rospy.Rate(10)
+        while not rospy.is_shutdown():
+            # Define goal message type
+            goal_msg = Pose()
+            #Define values for
+            goal_msg.Quaternion.x = self.x_coordinate
+            goal_msg.Quaternion.y = self.y_coordinate
+            goal_msg.Quaternion.z = 0
+            goal_msg.Quaternion.w = self.theta
+
+            #Publish goal message
+            goal_pub.publish(goal_msg) # Remove this
+
+            # Define the client and which server it will communicate with.
+            client = actionlib.SimpleActionClient('move_into_station', docking_action_test_server)
+            client.wait_for_server()
+            # send the goal to the server
+            client.send_goal(goal)
+            # Print the goal message to the monitor
+            rospy.loginfo("Sent the following goal to MoveBase %f" % goal )
+
+if __name__ == '__main__':
+    rospy.init_node('goal_planner') # Remove this
+    client = actionlib.SimpleActionClient('move_into_station', docking_action_test_server)
+    client.wait_for_server()
+    client.send_goal(goal)
+    client.wait_for_result(rospy.Duration.from_sec(5.0))

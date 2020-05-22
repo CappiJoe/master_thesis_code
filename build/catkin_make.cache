@@ -1,0 +1,2 @@
+autonomous_docking:charging_station_gazebo:docking_function:dummy_action:field_house:grey_wall_charging:gsp_navigation:ira_laser_tools:laser_nodes:laser_thorvald:simulation:teleop_keyboard_thorvald:test_package:tunnel_gazebo:tutorials_costmaps:tutorials_master:tutorials_tf
+-DCATKIN_DEVEL_PREFIX=/home/student/casper/workspace/devel -DCMAKE_INSTALL_PREFIX=/home/student/casper/workspace/install -G Unix Makefiles

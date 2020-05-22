@@ -1,0 +1,228 @@
+#! /usr/bin/env python
+
+###################### ONLY WORKS IN 1st AND 4th QUADRANT #################
+# XAXIS IS LONGITUDINAL AXIS THORVALD
+
+import numpy as np
+import matplotlib.pyplot as plt
+import math
+import angles
+
+print(angles.normalize(1.2, 0, 1))
+origin = np.array([0.0, 0.0])  # Robot coordinates
+
+o_points = np.array([0.0])
+
+
+p_a = np.array([2.0, -4.0])  # Detected point
+p_b = np.array([3.0, -2.0])  # Detected point
+
+
+# Min(alpha) = p1
+################# NOT NEEDED FOR LASER SCAN ################
+dx_p_a = p_a[0]-origin[0]
+dy_p_a = p_a[1]-origin[1]
+dx_p_b = p_b[0]-origin[0]
+dy_p_b = p_b[1]-origin[1]
+angle_xaxis_p_a = math.atan2(dy_p_a, dx_p_a)
+angle_xaxis_p_b = math.atan2(dy_p_b, dx_p_b)
+################# #################### ################
+
+# Use the point with the smallest angle as point 1
+if np.abs(angle_xaxis_p_a) < np.abs(angle_xaxis_p_b):
+    p1 = p_a
+    p2 = p_b
+else:
+    p1 = p_b
+    p2 = p_a
+
+# Distance and angle point 1
+dxdy_p1 = p1-origin
+dist_p1 = np.linalg.norm(dxdy_p1)
+angle_xaxis_p1 = math.atan2(dxdy_p1[1], dxdy_p1[0])
+
+# Distance and angle point 2
+dxdy_p2 = p2-origin
+dist_p2 = np.linalg.norm(dxdy_p2)
+angle_xaxis_p2 = math.atan2(dxdy_p2[1], dxdy_p2[0])
+
+print("p1: %f" % angle_xaxis_p1)
+print("p2: %f" % angle_xaxis_p2)
+angle_between_p1_p2 = angle_xaxis_p2-angle_xaxis_p1  # already conditioned through if
+baseline_length = np.linalg.norm(p2-p1)
+
+# Goal coordinates
+goal = (p1+p2)/2
+print(goal)
+dxdy_goal = goal-origin
+dist_goal = np.linalg.norm(goal-origin)  # Rho in controller
+angle_goal_wrt_x_axis = math.atan2(dxdy_goal[1], dxdy_goal[0])  # Delta
+# Angle of the normal of the baseline (THE FINAL ORIENTATION +/-)
+angle_of_baseline_normal_wrt_xaxis = angle_xaxis_p1 + math.pi/2 - math.atan2(dist_p2*math.sin(angle_between_p1_p2),
+                                                                             (dist_p1-dist_p2*math.cos(angle_between_p1_p2)))
+
+goal = np.array([goal[0], goal[1], angle_of_baseline_normal_wrt_xaxis])
+print(goal)
+print("goal: %s" % str(goal))
+
+
+# Define a reference point a given distance away from the final pose with the
+# same orientation
+ref_point_dist = 2  # Distance from final goal, change by desire
+p1_p2_dy = p2[1]-p1[1]
+p1_p2_dx = p2[0]-p1[0]
+
+"""
+The reference point needs to be calculated differently for different situtions.
+We'll use the y coordinate of the goal as reference to see if its positive or negative.
+From there, we'll use the delta x between p1 and p2 to get the orientation of the baseline.
+
+"""
+if goal[1] > 0:
+    ref_point_x = goal[0]-abs(ref_point_dist*math.cos(angle_of_baseline_normal_wrt_xaxis))
+    if p1_p2_dx < 0:
+        ref_point_y = goal[1]-abs(ref_point_dist*math.sin(angle_of_baseline_normal_wrt_xaxis))
+    elif p1_p2_dx > 0:
+        ref_point_y = goal[1]+abs(ref_point_dist*math.sin(angle_of_baseline_normal_wrt_xaxis))
+    elif p1_p2_dy == 0:  # dx = 0
+        ref_point_y = goal[1] - ref_point_dist
+    else:  # dx = 0
+        ref_point_y = goal[1]
+
+elif goal[1] < 0:
+    ref_point_x = goal[0]-abs(ref_point_dist*math.cos(angle_of_baseline_normal_wrt_xaxis))
+    if p1_p2_dx < 0:
+        ref_point_y = goal[1]+abs(ref_point_dist*math.sin(angle_of_baseline_normal_wrt_xaxis))
+    elif p1_p2_dx > 0:
+        ref_point_y = goal[1]-abs(ref_point_dist*math.sin(angle_of_baseline_normal_wrt_xaxis))
+    elif p1_p2_dy == 0:  # dx = 0
+        ref_point_y = goal[1] + ref_point_dist
+    else:  # dx = 0
+        ref_point_y = goal[1]
+else:
+    if p1_p2_dx != 0:
+        angle_of_baseline_normal_wrt_xaxis = (math.pi/2) + math.atan2((p1[1]-0), (p1[0]-goal[0]))
+        if p1[1] > 0:
+            if p1_p2_dx < 0:
+                ref_point_x = goal[0] - \
+                    abs(ref_point_dist*math.cos(angle_of_baseline_normal_wrt_xaxis))
+                ref_point_y = goal[1] + \
+                    abs(ref_point_dist*math.sin(angle_of_baseline_normal_wrt_xaxis))
+            elif p1_p2_dx > 0:
+                ref_point_x = goal[0] - \
+                    abs(ref_point_dist*math.cos(angle_of_baseline_normal_wrt_xaxis))
+                ref_point_y = goal[1] - \
+                    abs(ref_point_dist*math.sin(angle_of_baseline_normal_wrt_xaxis))
+        else:
+            if p1_p2_dx < 0:
+                ref_point_x = goal[0] - \
+                    abs(ref_point_dist*math.cos(angle_of_baseline_normal_wrt_xaxis))
+                ref_point_y = goal[1] - \
+                    abs(ref_point_dist*math.sin(angle_of_baseline_normal_wrt_xaxis))
+            elif p1_p2_dx > 0:
+                ref_point_x = goal[0] - \
+                    abs(ref_point_dist*math.cos(angle_of_baseline_normal_wrt_xaxis))
+                ref_point_y = goal[1] + \
+                    abs(ref_point_dist*math.sin(angle_of_baseline_normal_wrt_xaxis))
+    else:  # p1_p2_dx = 0
+        ref_point_x = goal[0] - ref_point_dist
+        ref_point_y = goal[1]
+
+ref_point = np.array([ref_point_x, ref_point_y, angle_of_baseline_normal_wrt_xaxis])
+
+# else:
+#     angle_of_baseline_wrt_xaxis = math.atan((p1_p2_dy)/(p1_p2_dx))
+#     print(angle_of_baseline_wrt_xaxis)
+#     print("dy: %f, dx: %f" % (p1_p2_dy, p1_p2_dx))
+#     if angle_of_baseline_normal_wrt_xaxis > math.pi/2:
+#         if p1_p2_dy < origin[0]:
+#             ref_point_x = goal[0]+abs(ref_point_dist*math.cos(angle_of_baseline_normal_wrt_xaxis))
+#             if p1_p2_dx < 0:
+#                 ref_point_y = goal[1] - \
+#                     abs(ref_point_dist*math.sin(angle_of_baseline_normal_wrt_xaxis))
+#                 print('dx mindre enn 0')
+#             else:
+#                 ref_point_y = goal[1] - \
+#                     abs(ref_point_dist*math.sin(angle_of_baseline_normal_wrt_xaxis))
+#                 print('dx storre enn 0')
+#             ref_point = np.array([ref_point_x, ref_point_y])
+#             print(ref_point_x, ref_point_y)
+#             print("forste")
+#         elif p1_p2_dy > origin[0]:
+#             ref_point_x = goal[0]-abs(ref_point_dist*math.cos(angle_of_baseline_normal_wrt_xaxis))
+#             ref_point_y = goal[1]-abs(ref_point_dist*math.sin(angle_of_baseline_normal_wrt_xaxis))
+#             ref_point = np.array([ref_point_x, ref_point_y])
+#             print("andre")
+#         elif p1_p2_dy == 0:
+#             if p1[1] >= 0:
+#                 ref_point_x = goal[0]
+#                 ref_point_y = goal[1]-ref_point_dist
+#             else:
+#                 ref_point_x = goal[0]
+#                 ref_point_y = goal[1]+ref_point_dist
+#             ref_point = np.array([ref_point_x, ref_point_y])
+#             print("tredje")
+#     elif angle_of_baseline_normal_wrt_xaxis < math.pi/2:
+#         print("PIKK")
+#         if p1_p2_dy < 0:
+#             ref_point_x = goal[0]-abs(ref_point_dist*math.cos(angle_of_baseline_normal_wrt_xaxis))
+#             ref_point_y = goal[1]+abs(ref_point_dist*math.sin(angle_of_baseline_normal_wrt_xaxis))
+#             ref_point = np.array([ref_point_x, ref_point_y])
+#             print(ref_point_x, ref_point_y)
+#             print("forsteeee")
+#         elif p1_p2_dy > 0:
+#             if p1_p2_dx < 0:
+#                 ref_point_x = goal[0] - \
+#                     abs(ref_point_dist*math.cos(angle_of_baseline_normal_wrt_xaxis))
+#             else:
+#                 ref_point_x = goal[0] + \
+#                     abs(ref_point_dist*math.cos(angle_of_baseline_normal_wrt_xaxis))
+#
+#             ref_point_y = goal[1]-abs(ref_point_dist*math.sin(angle_of_baseline_normal_wrt_xaxis))
+#             ref_point = np.array([ref_point_x, ref_point_y])
+#             print("faaeenn")
+#         elif p1_p2_dy == 0:
+#             if p1[1] >= 0:
+#                 ref_point_x = goal[0]
+#                 ref_point_y = goal[1]-ref_point_dist
+#             else:
+#                 ref_point_x = goal[0]
+#                 ref_point_y = goal[1]+ref_point_dist
+#             ref_point = np.array([ref_point_x, ref_point_y])
+#             print("fitteeeee")
+#     else:
+#         print("Nu eru ravkj0rt.. ")
+
+# DEN SISTE OVENFOR ER OK FOR pmpi/2
+
+# if (p1[0]-origin[0]) < 0 and (p2[0]-origin[0]) < 0:
+#     ref_point[0] += ref_point[0]
+
+points = [p1, p2, goal, ref_point]
+for p in points:
+    plt.plot(p[0], p[1], 'rx')
+plt.plot(origin[0], origin[1], 'go')
+plt.plot([origin[0], p1[0]], [origin[1], p1[1]], 'y--')
+plt.plot([origin[0], p2[0]], [origin[1], p2[1]], 'y--')
+plt.plot([p1[0], p2[0]], [p1[1], p2[1]], 'k-.')
+plt.plot([goal[0], ref_point[0]], [goal[1], ref_point[1]], 'g-.')
+plt.axis(xmin=-10, xmax=10, ymin=-10, ymax=10)
+plt.show()
+
+# Finding orientation of charger
+# law of sines gives: p2-biggest angle in triangle. see (1)
+# if p1[1] > p2[1]:
+#     angle_origin_goalpoint_p2 = math.asin(
+#         dist_p2*np.abs(math.sin(angle_xaxis_p2-angle_goal_wrt_x_axis)/(baseline_length/2)))  # Theta
+#     angle_origin_goal_x_axis = math.pi/2-angle_origin_goalpoint_p2  # Eta
+#     omega = math.pi-angle_goal_wrt_x_axis - angle_origin_goal_x_axis
+#     psi_goal = math.pi-omega  # angle_goal_wrt_x_axis + angle_origin_goal_x_axis
+#     print(psi_goal)
+#
+# else:
+#     angle_origin_goalpoint_p1 = math.asin(
+#         dist_p1*(math.sin(angle_goal_wrt_x_axis-angle_xaxis_p1)/(baseline_length/2)))  # Theta
+#     angle_origin_goal_x_axis = math.pi/2-angle_origin_goalpoint_p1  # Eta
+#     omega = math.pi-angle_goal_wrt_x_axis - angle_origin_goal_x_axis
+#     psi_goal = math.pi-omega  # angle_goal_wrt_x_axis + angle_origin_goal_x_axis
+#     print(psi_goal)

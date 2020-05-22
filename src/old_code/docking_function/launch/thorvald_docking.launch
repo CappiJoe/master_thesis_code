@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+    <include file="$(find laser_thorvald)/launch/robot_019.launch"/>
+    <include file="$(find laser_thorvald)/launch/corner_hokuyos_laser_merger.launch"/>
+</launch>

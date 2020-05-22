@@ -1,0 +1,8 @@
+prefix=/home/student/casper/workspace/install
+
+Name: docking_function
+Description: Description of docking_function
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<launch>
+    <param name="house_description" command="cat '$(find field_house)/urdf/field_house.urdf'"/>
+    <node name="spawn_warehouse_urdf" pkg="gazebo_ros" type="spawn_model" output="screen"
+        args ="-urdf -param house_description -model field_house"/>
+</launch>

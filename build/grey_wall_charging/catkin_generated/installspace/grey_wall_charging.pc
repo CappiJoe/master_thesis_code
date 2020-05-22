@@ -1,0 +1,8 @@
+prefix=/home/student/casper/workspace/install
+
+Name: grey_wall_charging
+Description: Description of grey_wall_charging
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

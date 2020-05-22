@@ -1,0 +1,85 @@
+#! /usr/bin/env python
+
+import roslib
+import rospy
+import tf
+import math as m
+import numpy as np
+from sensor_msgs.msg import LaserScan
+import matplotlib.pyplot as plt
+# For point clustering
+from sklearn. import KMeans
+
+class localize_charger(object):
+    def __init__(self, x=0.0, y=0.0, orientation=0.0):
+        self.x = x
+        self.y = y
+        self.orientation = orientation
+        rospy.Subscriber('scan', LaserScan, self.localize_charger_callback, queue_size=1)
+
+    def localize_charger_callback(self, scan_msg):
+        rate = rospy.Rate(0.5)
+        angle_min = scan_msg.angle_min
+        angle_max = scan_msg.angle_max
+        angle_inc = scan_msg.angle_increment
+        ranges = scan_msg.ranges
+        intensities = np.zeros_like(ranges)#np.zeros_like(ranges)#scan_msg.intensities
+        distances = np.array([])
+        angles = np.array([])
+        for idx, val in enumerate(ranges):
+            if val < 50: # Must be changed to intensities
+                current_angle = angle_min + idx*angle_inc
+                distances = np.append(distances, val)
+                angles = np.append(angles,current_angle)
+        pillars = np.array([distances,angles])
+        pillar1_dist = np.array([])
+        pillar1_ang = np.array([])
+        pillar2_dist = np.array([])
+        pillar2_ang = np.array([])
+
+        for idx,val in enumerate(pillars[0]):
+            #print(val[0][0])
+            ref = pillars[0][0]
+            #print(pillars[0][0])
+            if val > ref+1 or val<ref-1:
+                pillar2_dist = np.append(pillar2_dist,pillars[0][idx])
+                pillar2_ang = np.append(pillar2_ang,pillars[1][idx])
+            else:
+                pillar1_dist = np.append(pillar1_dist,pillars[0][idx])
+                pillar1_ang = np.append(pillar1_ang,pillars[1][idx])
+
+        pillar1_mean_dist = np.mean(pillar1_dist)
+        pillar1_mean_angl = np.mean(pillar1_ang)
+        pillar2_mean_dist = np.mean(pillar2_dist)
+        pillar2_mean_angl = np.mean(pillar2_ang)
+
+        #clustering
+        km = KMeans(n_clusters=2,init='random',n_init  )
+
+
+        pillar1_coor = np.array([pillar1_mean_dist*m.cos(pillar1_mean_angl),pillar1_mean_dist*m.sin(pillar1_mean_angl)])
+        pillar2_coor = np.array([pillar2_mean_dist*m.cos(pillar2_mean_angl),pillar2_mean_dist*m.sin(pillar2_mean_angl)])
+        print(pillar1_coor)
+        print(pillar2_coor)
+        charger_coor = (pillar1_coor+pillar2_coor)/2
+        print(charger_coor)
+        br = tf.TransformBroadcaster()
+        rospy.loginfo("tf is broadcasted")
+        alpha = abs(pillar1_mean_angl-pillar2_mean_angl)
+        a_2 = pillar1_mean_dist-pillar1_mean_dist*m.cos(alpha)
+        x = pillar1_mean_dist*m.sin(alpha)
+
+        theta = (m.pi/2)-m.atan2(x,a_2)
+        rate = rospy.Rate(10)
+        while not rospy.is_shutdown():
+            br.sendTransform((charger_coor[0], charger_coor[1], 0),
+                             tf.transformations.quaternion_from_euler(0, 0, theta),
+                             rospy.Time.now(),
+                             'charger',
+                             'base_link')
+        rate.sleep()
+
+if __name__ == '__main__':
+    rospy.init_node('fixed_charger_frame')
+    localize_charger()
+    rospy.spin()

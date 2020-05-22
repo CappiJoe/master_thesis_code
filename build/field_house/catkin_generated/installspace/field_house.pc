@@ -1,0 +1,8 @@
+prefix=/home/student/casper/workspace/install
+
+Name: field_house
+Description: Description of field_house
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

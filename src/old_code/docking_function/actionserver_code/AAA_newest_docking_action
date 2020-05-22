@@ -1,0 +1,238 @@
+#! /usr/bin/env python
+
+import rospy
+import actionlib
+import rospy
+import numpy as np
+import math
+import tf
+import angles
+
+import actionlib
+import actionlib_msgs
+import move_base_msgs.msg
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
+
+from geometry_msgs.msg import Twist, Pose, PoseStamped
+from sensor_msgs.msg import LaserScan
+from nav_msgs.msg import Odometry
+import matplotlib.pyplot as plt
+
+class align_action(object):
+    #messages for publishing feedback and result
+    _feedback = move_base_msgs.msg.MoveBaseFeedback()
+    _result = move_base_msgs.msg.MoveBaseResult()
+
+    def __init__(self, name):
+        #Odometry data
+        rospy.Subscriber("/odometry/base_raw", Odometry, self.odom_callback, queue_size=1) # Kalman Filter
+        self.x_coor = 0
+        self.y_coor = 0
+        self.current_heading = 0
+        self.current_vel = 0
+
+        #Action initialization
+        self._action_name = name
+        self._as = actionlib.SimpleActionServer(self._action_name, move_base_msgs.msg.MoveBaseAction, execute_cb=self.execute_cb, auto_start=False)
+        self._as.start()
+        self.charger_sent = False
+        self.goal_pose = [0,0,0]
+        self.charger_is_found = False
+
+
+    def find_charger(self, scan_msg):
+        rate_charger = rospy.Rate(0.2)
+        max_range_laser = scan_msg.range_max
+        min_range_laser = scan_msg.range_min
+        #Data of interest from the scan:
+        scan_ranges = scan_msg.ranges
+        scan_angle_min = scan_msg.angle_min
+        scan_angle_inc = scan_msg.angle_increment
+        scan_intensities = np.zeros_like(scan_ranges) #scan_msg.intensities
+        intensity_threshold = 15000 ###Change after testing
+
+        ################################### FOR TEST ########################
+        test_idx = [idx for idx,val in enumerate(scan_ranges) if val<51 and val>0]
+        for k in test_idx:
+            scan_intensities[k] = 15001
+        ####################################################################
+
+        #Find the points with increased intensity
+        cluster_points_distances = np.array([])
+        cluster_points_angles = np.array([])
+        for idx, distance in enumerate(scan_ranges):
+            point_intensity = scan_intensities[idx]
+            if point_intensity > intensity_threshold:
+                point_angle = scan_angle_min + idx*scan_angle_inc #Start angle + n.o. angle increment to current laser tag
+                cluster_points_distances = np.append(cluster_points_distances, distance)
+                cluster_points_angles = np.append(cluster_points_angles, point_angle)
+        cluster_points = np.array([cluster_points_distances,cluster_points_angles])
+
+        #Sort the into two clusters based on distance><mean
+        close_cluster_distance = np.array([])
+        close_cluster_angle = np.array([])
+        far_cluster_distance = np.array([])
+        far_cluster_angle = np.array([])
+        for idx, val in enumerate(cluster_points[0]):
+            if val < np.mean(cluster_points[0]):
+                close_cluster_distance = np.append(close_cluster_distance,cluster_points[0][idx])
+                close_cluster_angle = np.append(close_cluster_angle,cluster_points[1][idx])
+            else:
+                far_cluster_distance = np.append(far_cluster_distance,cluster_points[0][idx])
+                far_cluster_angle = np.append(far_cluster_angle,cluster_points[1][idx])
+
+        #Take the mean of the closest and furthest cluster to approximate the position of the pillar.
+        closest_point = np.array([np.mean(close_cluster_distance),np.mean(close_cluster_angle)])
+        furthest_point = np.array([np.mean(far_cluster_distance),np.mean(far_cluster_angle)])
+        #
+        closest_pillar_coor = np.array([closest_point[0]*math.cos(closest_point[1]),closest_point[0]*math.sin(closest_point[1])])
+        furthest_pillar_coor = np.array([furthest_point[0]*math.cos(furthest_point[1]),furthest_point[0]*math.sin(furthest_point[1])])
+
+        #Define the coordinates of the final docking point
+        docking_coor = (closest_pillar_coor+furthest_pillar_coor)/2
+        alpha = abs(closest_point[1]-furthest_point[1])
+        a_2 = furthest_point[1]-closest_point[1]*math.cos(alpha)
+        x = closest_point[1]*math.sin(alpha)
+        theta = angles.normalize_angle(self.current_heading + (math.pi/2)-math.atan2(x,a_2))
+        # Update goal pose
+        self.goal_pose = [self.x_coor+docking_coor[0],self.y_coor+docking_coor[1],theta]
+        rospy.loginfo("Goal pose: %s" %str(self.goal_pose))
+        if self.charger_is_found:
+            rospy.loginfo("Charger is found!")
+        self.charger_is_found = True
+        # if baseline in range... 0
+        # charger_is_found = True
+        # else:
+        # charger_is_found = False
+
+        if self.charger_sent == False:
+            br = tf.TransformBroadcaster()
+            br.sendTransform((goal_pose[0], goal_pose[1], 0),
+                             tf.transformations.quaternion_from_euler(0, 0, goal_pose[2]),
+                             rospy.Time.now(),
+                             'charger',
+                             'base_link') #base_link
+            self.charger_sent = True
+
+        rate_charger.sleep()
+
+    def pose_controller(self):
+        rate = rospy.Rate(10.0)
+        #For controller:
+        thorvald_vel = rospy.Publisher('/nav_vel', Twist, queue_size=1) # Publishing msg to the nav_vel topic. Twist as msg type.
+        cmd = Twist()
+
+        #### UPDATE!!!
+        goal_pose = self.goal_pose # TEST
+
+
+        #Control Parameters
+        x0 = self.x_coor #current x coordinate
+        y0 = self.y_coor #current y coordinate
+        current_heading = self.current_heading
+        #current_heading =
+
+        max_trans_vel = 0.4 # maximum longitudinal velocity
+        max_rot_vel = 0.5 # maximum yaw rate
+        ## Stability: k_alpha>0, k_beta<0 and (k_alpha-k_rho)>0
+        k_rho = 0.5 # control gain for velocity
+        k_alpha = 5 # control gain for heading error
+        k_beta = -2# control gain for goal orientation
+
+        dx = goal_pose[0]-x0
+        dy = goal_pose[1]-y0
+        distance_to_goal = math.sqrt(dx**2+dy**2)
+        angle_to_waypoint = angles.normalize_angle(math.atan2(dy,dx))
+        heading_error = angles.normalize_angle(angle_to_waypoint-self.current_heading)
+
+        rho = distance_to_goal
+        alpha = heading_error
+        beta = angles.normalize_angle(-alpha-self.current_heading+goal_pose[2])
+
+        if alpha < -math.pi/2:
+            alpha = -math.pi/2
+        elif alpha > math.pi/2:
+            alpha = math.pi/2
+
+        #Control commands
+        velocity_x = k_rho*rho
+        steering_rate = k_alpha*alpha + k_beta*beta
+
+        goal_orientation_degree = goal_pose[2]*180/math.pi
+        current_heading_degree = self.current_heading*180/math.pi
+        print("goal: %f" %goal_orientation_degree)
+        print("current: %f" %current_heading_degree)
+        if  self.current_vel <0.08 and int(current_heading_degree) in range(int(goal_orientation_degree)-5,int(goal_orientation_degree)+5):
+            if distance_to_goal < 0.3:
+                velocity_x = 0
+
+
+        print("HER %f" %steering_rate)
+        print("Heading error: %f" %alpha)
+
+        if abs(velocity_x) > max_trans_vel :
+            cmd.linear.x = max_trans_vel * (velocity_x/abs(velocity_x))
+        else:
+            cmd.linear.x = velocity_x
+
+        if abs(steering_rate) > max_rot_vel:
+             cmd.angular.z = max_rot_vel * (steering_rate/abs(steering_rate))
+        else:
+             cmd.angular.z = steering_rate
+        #thorvald_vel.publish(cmd)
+        rate.sleep()
+
+    def odom_callback(self, odom_msg):
+        rate = rospy.Rate(10.0)
+        #Coordinates
+        self.x_coor = odom_msg.pose.pose.position.x
+        self.y_coor = odom_msg.pose.pose.position.y
+        #Heading
+        self.odom_q = odom_msg.pose.pose.orientation
+
+        #self.current_heading = angles.normalize_angle(2*math.acos(odom_msg.pose.pose.orientation.w))
+        (roll, pitch, yaw) = euler_from_quaternion([self.odom_q.x, self.odom_q.y, self.odom_q.z,self.odom_q.w])
+        self.current_heading = angles.normalize_angle(yaw)
+        #Velocity
+        self.current_vel = odom_msg.twist.twist.linear.x
+        rospy.loginfo("x coordinate: %f, y coordinate: %f, heading: %f, longitudinal velocity: %f" %(self.x_coor, self.y_coor, self.current_heading, self.current_vel))
+
+    def execute_cb(self, goal):
+        # helper variables
+        rate = rospy.Rate(1)
+        success = True
+        #Find charger
+        rospy.Subscriber("scan_front", LaserScan, self.find_charger, queue_size=None)
+        ############### Define the goal pose
+        # rot_q = goal.target_pose.pose.orientation
+        # (roll, pitch, yaw) = euler_from_quaternion([rot_q.x, rot_q.y, rot_q.z,rot_q.w])
+        # goal_orientation = angles.normalize_angle(yaw)
+        # goal_x = goal.target_pose.pose.position.x
+        # goal_y = goal.target_pose.pose.position.y
+        # self.goal_pose = [goal_x,goal_y,goal_orientation]
+
+        ############## Feedback
+        self._feedback.base_position.pose.position.x = self.x_coor
+        self._feedback.base_position.pose.position.y = self.y_coor
+        #self._feedback.base_position.pose.orientation.z = self.odom_q.z
+        #self._feedback.base_position.pose.orientation.w = self.odom_q.w
+        self._as.publish_feedback(self._feedback)
+        self.pose_controller()
+
+        rospy.loginfo("%s: executing... current goal: '[%s]'" %(self._action_name,','.join(map(str, self.goal_pose))))
+        #Check that preempt has not been requested
+        if self._as.is_preempt_requested():
+            rospy.loginfo("%s: preempted..." %self._action_name)
+            self._as.set_preempted()
+            success = False
+            #break
+        rate.sleep()
+
+        if success:
+            #self._result.success = True
+            rospy.loginfo("%s: succeeded!"%self._action_name)
+            self._as.set_succeeded(self._result)
+if __name__ == "__main__":
+    rospy.init_node("align_action")
+    server = align_action(rospy.get_name())
+    rospy.spin()

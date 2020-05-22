@@ -1,0 +1,37 @@
+<sdf version='1.6'>
+  <model name='charger-platform'>
+    <link name='charger_urdf'>
+      <pose frame=''>0 0 0 0 -0 0</pose>
+      <inertial>
+        <pose frame=''>1.8398 -1.9097 0 0 -0 0</pose>
+        <mass>3778.9</mass>
+        <inertia>
+          <ixx>999.34</ixx>
+          <ixy>47.546</ixy>
+          <ixz>85.759</ixz>
+          <iyy>2269.6</iyy>
+          <iyz>21.978</iyz>
+          <izz>3058.2</izz>
+        </inertia>
+      </inertial>
+      <collision name='charger_urdf_collision'>
+        <pose frame=''>0 0 0 1.5708 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://charger_urdf/meshes/charger_urdf.dae</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name='charger_urdf_visual'>
+        <pose frame=''>0 0 0 1.5708 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://charger_urdf/meshes/charger_urdf.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>

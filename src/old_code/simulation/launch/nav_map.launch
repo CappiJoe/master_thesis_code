@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+
+<arg name="map_file" default="$(find simulation)/maps/sim_env_new.yaml"/>
+<node pkg="map_server" type="map_server" name="map_server" args="$(arg map_file)"/>
+
+<include file="$(find simulation)/launch/charging_world.launch" />
+<include file="$(find simulation)/launch/amcl_omni.launch" />
+<include file="$(find simulation)/launch/localization_local.launch" />
+<include file="$(find simulation)/launch/move_base_dwa.launch" />
+<include file="$(find simulation)/launch/fake_localization.launch" />
+
+</launch>

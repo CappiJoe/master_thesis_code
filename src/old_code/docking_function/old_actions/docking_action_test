@@ -1,0 +1,15 @@
+#! /usr/bin/env python
+
+import rospy
+import actionlib
+import move_base_msgs.msg
+from geometry_msgs import Twist
+
+class move_into_station(object):
+    #Create result message
+    _result = move_base_msgs.msg.MoveBaseResult()
+
+    def __init__(self, name):
+        self._cmd_pub = rospy.Publisher('nav_vel', Twist, queue_size=1)
+
+        self._as = actionlib.SimpleActionServer(self._action_name, move_base_msgs.msg.MoveBaseAction, executable_cb=self.executable_cb, auto_start = False)

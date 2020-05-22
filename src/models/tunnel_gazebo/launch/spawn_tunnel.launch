@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+    <param name="tunnel_description" command="cat '$(find tunnel_gazebo)/urdf/tunnel.urdf'"/>
+    <node name="spawn_tunnel_urdf" pkg="gazebo_ros" type="spawn_model" output="screen"
+        args ="-urdf -param tunnel_description -model tunnel"/>
+</launch>
+

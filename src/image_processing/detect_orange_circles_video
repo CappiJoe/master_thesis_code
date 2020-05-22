@@ -1,0 +1,65 @@
+#! /usr/bin/env python
+
+import cv2 as cv
+import numpy as np
+import matplotlib.pyplot as plt
+import imutils
+
+vid = cv.VideoCapture('front.mp4')
+
+#Color Ranges
+light_orange = (5, 120, 120)
+dark_orange = (40, 255, 255)
+light_white = (30, 255, 255)
+dark_white = (40, 255, 255)
+
+if(vid.isOpened() == False):
+    print("Error opening video...")
+
+while(vid.isOpened()):
+    ret, frame = vid.read()
+    if ret == True:
+        frame = imutils.resize(frame, width=1000)
+        original_frame = frame.copy()
+        frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
+        hsv_frame = cv.cvtColor(frame, cv.COLOR_RGB2HSV)
+        mask_yellow = cv.inRange(hsv_frame, light_orange, dark_orange)
+        mask_white = cv.inRange(hsv_frame, light_white, dark_white)
+        mask = mask_yellow #+ mask_white
+        cv.imshow("orange", mask)
+        result = cv.bitwise_and(hsv_frame, frame, mask=mask)
+
+
+        #result = cv.cvtColor(result, cv.COLOR_HSV2RGB)
+
+        grey = cv.cvtColor(result,cv.COLOR_RGB2GRAY)
+        grey = cv.medianBlur(grey,9)
+        try:
+            circles = cv.HoughCircles(grey, cv.HOUGH_GRADIENT, 1.5, 120,
+                                  param1=70, param2=90, minRadius=0, maxRadius=0)
+            detected_circles = np.uint16(np.around(circles))
+            circle_coords = []
+            for (x,y,r) in detected_circles[0,:]:
+                cv.circle(original_frame, (x,y), r, (0,255,0),3)
+                cv.circle(original_frame, (x,y), 2, (255,0,0),3)
+                circle_coords.append([x,y])
+                print(circle_coords)
+            if len(detected_circles[0])>0:
+                print(circle_coords[0][1])
+                x_mid = (circle_coords[0][0]+circle_coords[1][0])/2
+                y_mid = (circle_coords[0][1]+circle_coords[1][1])/2
+                cv.line(original_frame,(circle_coords[0][0],circle_coords[0][1]),(circle_coords[1][0],circle_coords[1][1]),(0,0,255),3)
+                cv.circle(original_frame,(x_mid,y_mid),2,(255,255,0),2)
+                print("line")
+            else:
+                continue
+        except:
+            print("Cannot find circle")
+        cv.imshow('original_frame', original_frame)
+        if cv.waitKey(10) & 0xFF == ord('q'):
+            break
+
+    else:
+        break
+vid.release()
+cv.destroyAllWindows()

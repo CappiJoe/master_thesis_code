@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+    <param name="station_description" command="cat '$(find charging_station_gazebo)/urdf/charging_station_new.urdf'"/>
+    <node name="spawn_charging_station_urdf" pkg="gazebo_ros" type="spawn_model" output="screen"
+        args ="-urdf -param station_description -model charging_station"/>
+</launch>
