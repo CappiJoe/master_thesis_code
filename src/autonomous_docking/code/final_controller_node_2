@@ -177,10 +177,9 @@ class docking_controller(object):
         cmd_max_trans_vel = 0.2# maximum longitudinal velocity
         cmd_max_rot_vel = 0.2# maximum yaw rate
 
-        """Stability: k_alpha>0, k_beta<0 and (k_alpha-k_rho)>0"""
         k_rho = 0.5 # control gain for longitudinal velocity
-        k_alpha = 0.6 # control gain for heading error
-        k_beta = -0.8# control gain for goal orientation
+        k_alpha = 1.1 # control gain for heading error
+        k_beta = -0.3# control gain for goal orientation
 
         dx = docking_goal[0]-self.thorvald_x_coordinate #Difference in x coordinates between Thorvald and docking_goal
         dy = docking_goal[1]-self.thorvald_y_coordinate #Difference in y coordinates between Thorvald and docking_goal
@@ -195,7 +194,7 @@ class docking_controller(object):
 
         """ Linearized controller for small angles, non-linear for greater angles """
         cmd_velocity_x = k_rho*rho
-        cmd_steering_rate = (k_alpha+k_rho)*alpha + (k_beta+k_rho)*beta
+        cmd_steering_rate = k_alpha*alpha + k_beta*beta
         cmd.linear.x = cmd_velocity_x
 
 
@@ -221,10 +220,12 @@ class docking_controller(object):
         cmd_max_trans_vel = 0.4 # maximum longitudinal velocity
         cmd_max_rot_vel = 0.8 # maximum yaw rate
 
-        """Stability: k_alpha>0, k_beta<0 and (k_alpha-k_rho)>0"""
         k_rho = 0.5 # control gain for longitudinal velocity
         k_alpha = 0.6# control gain for heading error
-        k_beta = -1.85# control gain for goal orientation
+        k_beta = 1.85# control gain for goal orientation
+
+        k_alpha_lin = 1.1# control gain for heading error,linear controller
+        k_beta_lin = -1.35# control gain for goal orientation,linear controller
 
         dx = goal[0]-self.thorvald_x_coordinate #Difference in x coordinates between Thorvald and goal
         dy = goal[1]-self.thorvald_y_coordinate #Difference in y coordinates between Thorvald and goal
@@ -236,7 +237,7 @@ class docking_controller(object):
         """ Linearized controller for small angles, non-linear for greater angles """
         if abs(alpha) < math.pi/18: #Linear
             cmd_velocity_x = k_rho*rho
-            cmd_steering_rate = (k_alpha+k_rho)*alpha + (k_beta+k_rho)*beta
+            cmd_steering_rate = k_alpha_lin*alpha + k_beta_lin*beta
         else:  #Non-linear
             cmd_velocity_x = k_rho*rho*math.cos(alpha)
             cmd_steering_rate = k_alpha*alpha + k_rho*((math.sin(alpha)*math.cos(alpha))/alpha)*(alpha + k_beta*beta)
